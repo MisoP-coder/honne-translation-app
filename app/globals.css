@@ -1,0 +1,47 @@
+@import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap');
+
+:root {
+  --ht-bg: #f6f5f1;
+  --ht-ink: #22242a;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--ht-bg);
+  color: var(--ht-ink);
+  font-family: 'Zen Kaku Gothic New', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
+}
+
+button {
+  font-family: inherit;
+}
+
+@keyframes htDot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+
+.ht-toggle {
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+/* スマホ幅を基準にしつつ、PC では中央寄せ */
+.ht-shell {
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100dvh;
+  box-sizing: border-box;
+  padding: 20px 16px 40px;
+}

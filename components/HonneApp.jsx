@@ -1,0 +1,633 @@
+'use client';
+
+import { useState, useRef, useEffect } from 'react';
+
+import { createClient } from '@/lib/supabase/client';
+import {
+  TRAIT_QUESTIONS,
+  OUTCOMES,
+  LOADING_MESSAGES,
+  RECORDS_THRESHOLD,
+  emptyTraits,
+  normalizeTraits,
+} from '@/lib/constants';
+import {
+  theme,
+  FONT_HEAD,
+  riskColors,
+  primaryBtn,
+  ghostBtn,
+  card,
+  inputStyle,
+} from '@/lib/theme';
+
+export default function HonneApp({ userEmail, initialProfiles, initialRecords }) {
+  const supabaseRef = useRef(null);
+  const getSupabase = () => {
+    if (!supabaseRef.current) supabaseRef.current = createClient();
+    return supabaseRef.current;
+  };
+
+  const [view, setView] = useState('home');
+  const [profiles, setProfiles] = useState(initialProfiles);
+  const [records, setRecords] = useState(initialRecords);
+
+  const [editingProfile, setEditingProfile] = useState(null);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [selectedProfileId, setSelectedProfileId] = useState(null);
+  const [situation, setSituation] = useState('');
+  const [loadingStep, setLoadingStep] = useState(0);
+  const [candidates, setCandidates] = useState(null);
+  const [expandedIdx, setExpandedIdx] = useState(null);
+  const [outcomes, setOutcomes] = useState({});
+  const [error, setError] = useState(null);
+
+  const stepTimerRef = useRef(null);
+  useEffect(() => () => clearInterval(stepTimerRef.current), []);
+
+  const selectedProfile = profiles.find((p) => p.id === selectedProfileId);
+  const recordCount = (profileId) => records.filter((r) => r.profile_id === profileId).length;
+
+  // --- 上司プロフィール -----------------------------------------------------
+
+  const startNewProfile = () => {
+    setError(null);
+    setEditingProfile({ id: null, name: '', traits: emptyTraits(), note: '' });
+    setView('profileForm');
+  };
+
+  const startEditProfile = (profile) => {
+    setError(null);
+    setEditingProfile({
+      id: profile.id,
+      name: profile.name,
+      traits: normalizeTraits(profile.traits),
+      note: profile.note ?? '',
+    });
+    setView('profileForm');
+  };
+
+  const saveProfile = async () => {
+    if (!editingProfile || !editingProfile.name.trim() || savingProfile) return;
+
+    setSavingProfile(true);
+    setError(null);
+
+    const supabase = getSupabase();
+    const payload = {
+      name: editingProfile.name.trim(),
+      traits: editingProfile.traits,
+      note: editingProfile.note.trim(),
+    };
+
+    try {
+      if (editingProfile.id) {
+        const { data, error: updateError } = await supabase
+          .from('boss_profiles')
+          .update(payload)
+          .eq('id', editingProfile.id)
+          .select('id, name, traits, note, created_at')
+          .single();
+        if (updateError) throw updateError;
+        setProfiles((prev) => prev.map((p) => (p.id === data.id ? data : p)));
+      } else {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) throw new Error('セッションが切れました。もう一度ログインしてください。');
+
+        const { data, error: insertError } = await supabase
+          .from('boss_profiles')
+          .insert({ ...payload, user_id: user.id })
+          .select('id, name, traits, note, created_at')
+          .single();
+        if (insertError) throw insertError;
+        setProfiles((prev) => [...prev, data]);
+      }
+      setEditingProfile(null);
+      setView('home');
+    } catch (e) {
+      setError(e?.message || '保存に失敗しました。もう一度お試しください。');
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  // --- 相談 ---------------------------------------------------------------
+
+  const startInput = (profileId) => {
+    setSelectedProfileId(profileId);
+    setSituation('');
+    setCandidates(null);
+    setOutcomes({});
+    setError(null);
+    setView('input');
+  };
+
+  const runAnalysis = async () => {
+    if (!selectedProfile || !situation.trim()) return;
+
+    setView('loading');
+    setLoadingStep(0);
+    setError(null);
+
+    clearInterval(stepTimerRef.current);
+    stepTimerRef.current = setInterval(() => {
+      setLoadingStep((s) => (s < LOADING_MESSAGES.length - 1 ? s + 1 : s));
+    }, 650);
+
+    try {
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ profileId: selectedProfile.id, situation: situation.trim() }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || '候補の生成に失敗しました。');
+
+      clearInterval(stepTimerRef.current);
+      setCandidates(data.candidates || []);
+      setExpandedIdx(null);
+      setOutcomes({});
+      setView('results');
+    } catch (e) {
+      clearInterval(stepTimerRef.current);
+      setError(e?.message || '候補の生成に失敗しました。もう一度お試しください。');
+      setView('input');
+    }
+  };
+
+  const recordOutcome = async (idx, candidate, outcome) => {
+    if (!selectedProfile) return;
+    const previous = outcomes[idx];
+    setOutcomes((prev) => ({ ...prev, [idx]: outcome }));
+
+    const supabase = getSupabase();
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error('セッションが切れました。もう一度ログインしてください。');
+
+      const { data, error: insertError } = await supabase
+        .from('outcome_records')
+        .insert({
+          user_id: user.id,
+          profile_id: selectedProfile.id,
+          situation: situation.trim(),
+          message: candidate.message,
+          candidate_type: candidate.type ?? '',
+          outcome,
+        })
+        .select('id, profile_id, situation, message, candidate_type, outcome, created_at')
+        .single();
+      if (insertError) throw insertError;
+
+      setRecords((prev) => [data, ...prev]);
+    } catch (e) {
+      setOutcomes((prev) => ({ ...prev, [idx]: previous }));
+      setError(e?.message || '記録の保存に失敗しました。');
+    }
+  };
+
+  const copyText = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      /* クリップボードが使えない環境ではそのまま */
+    }
+  };
+
+  // --- スタイル -----------------------------------------------------------
+
+  const h1 = { fontFamily: FONT_HEAD, fontSize: 22, fontWeight: 700, margin: '0 0 4px' };
+  const sub = { fontSize: 13, color: theme.inkMuted, margin: '0 0 20px' };
+  const backBtn = {
+    background: 'none',
+    border: 'none',
+    color: theme.inkMuted,
+    fontSize: 13,
+    cursor: 'pointer',
+    padding: 0,
+    marginBottom: 12,
+  };
+
+  return (
+    <div className="ht-shell">
+      {view === 'home' && (
+        <>
+          <header
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-start',
+              marginBottom: 16,
+            }}
+          >
+            <div>
+              <h1 style={h1}>言いにくいことの翻訳</h1>
+              <p style={{ ...sub, margin: 0 }}>上司を選んで、今の状況を相談してみましょう。</p>
+            </div>
+            <form action="/auth/signout" method="post">
+              <button
+                type="submit"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: theme.inkMuted,
+                  fontSize: 12,
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                ログアウト
+              </button>
+            </form>
+          </header>
+
+          {userEmail && (
+            <p style={{ fontSize: 11, color: theme.inkMuted, margin: '0 0 16px' }}>{userEmail}</p>
+          )}
+
+          {error && <p style={{ color: theme.danger, fontSize: 13, margin: '0 0 12px' }}>{error}</p>}
+
+          {profiles.length === 0 && (
+            <div style={{ ...card, textAlign: 'center', color: theme.inkMuted, marginBottom: 16 }}>
+              <p style={{ margin: 0, fontSize: 14 }}>
+                まだ上司が登録されていません。まずは1人登録してみましょう。
+              </p>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
+            {profiles.map((p) => {
+              const traits = normalizeTraits(p.traits);
+              const count = recordCount(p.id);
+              return (
+                <div key={p.id} style={card}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginBottom: 8,
+                    }}
+                  >
+                    <p style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>{p.name}</p>
+                    <button
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: theme.inkMuted,
+                        fontSize: 12,
+                        cursor: 'pointer',
+                        textDecoration: 'underline',
+                      }}
+                      onClick={() => startEditProfile(p)}
+                    >
+                      編集
+                    </button>
+                  </div>
+                  <p style={{ margin: '0 0 6px', fontSize: 12, color: theme.inkMuted }}>
+                    {traits.reaction} ・ {traits.order} ・ {traits.channel}
+                  </p>
+                  <p style={{ margin: '0 0 12px', fontSize: 11, color: theme.inkMuted }}>
+                    {count >= RECORDS_THRESHOLD
+                      ? `実績${count}件をもとに予測します`
+                      : `実績${count}件(あと${RECORDS_THRESHOLD - count}件でこの上司専用の予測になります)`}
+                  </p>
+                  <button style={{ ...primaryBtn, width: '100%' }} onClick={() => startInput(p.id)}>
+                    この上司に相談する
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          <button style={{ ...ghostBtn, width: '100%' }} onClick={startNewProfile}>
+            + 新しい上司を登録する
+          </button>
+        </>
+      )}
+
+      {view === 'profileForm' && editingProfile && (
+        <>
+          <h1 style={h1}>{editingProfile.id ? '上司プロフィール編集' : '上司プロフィール登録'}</h1>
+          <p style={sub}>簡単な設問に答えるだけで登録できます。</p>
+
+          <div style={{ ...card, display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div>
+              <label
+                htmlFor="boss-name"
+                style={{ fontSize: 13, color: theme.inkMuted, display: 'block', marginBottom: 6 }}
+              >
+                呼び名
+              </label>
+              <input
+                id="boss-name"
+                value={editingProfile.name}
+                onChange={(e) => setEditingProfile({ ...editingProfile, name: e.target.value })}
+                placeholder="例:田中部長"
+                maxLength={60}
+                style={inputStyle}
+              />
+            </div>
+
+            {TRAIT_QUESTIONS.map((q) => (
+              <div key={q.key}>
+                <p style={{ fontSize: 13, color: theme.inkMuted, margin: '0 0 8px' }}>{q.label}</p>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  {q.options.map((opt) => {
+                    const active = editingProfile.traits[q.key] === opt;
+                    return (
+                      <button
+                        key={opt}
+                        className="ht-toggle"
+                        onClick={() =>
+                          setEditingProfile({
+                            ...editingProfile,
+                            traits: { ...editingProfile.traits, [q.key]: opt },
+                          })
+                        }
+                        style={{
+                          padding: '10px 8px',
+                          borderRadius: 8,
+                          border: `1px solid ${active ? theme.accent : theme.border}`,
+                          background: active ? theme.accentSoft : '#fff',
+                          color: active ? theme.accent : theme.ink,
+                          fontSize: 13,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {opt}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+
+            <div>
+              <p style={{ fontSize: 13, color: theme.inkMuted, margin: '0 0 8px' }}>
+                地雷ワード・NGな言い方(任意)
+              </p>
+              <textarea
+                rows={3}
+                value={editingProfile.note}
+                onChange={(e) => setEditingProfile({ ...editingProfile, note: e.target.value })}
+                placeholder="例:「できません」という言い方をすると特に不機嫌になる"
+                style={{ ...inputStyle, fontSize: 13, resize: 'none' }}
+              />
+            </div>
+          </div>
+
+          {error && <p style={{ color: theme.danger, fontSize: 13, margin: '12px 0 0' }}>{error}</p>}
+
+          <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+            <button
+              style={{ ...ghostBtn, flex: 1 }}
+              onClick={() => {
+                setEditingProfile(null);
+                setError(null);
+                setView('home');
+              }}
+            >
+              キャンセル
+            </button>
+            <button
+              style={{
+                ...primaryBtn,
+                flex: 2,
+                opacity: editingProfile.name.trim() && !savingProfile ? 1 : 0.5,
+              }}
+              onClick={saveProfile}
+              disabled={!editingProfile.name.trim() || savingProfile}
+            >
+              {savingProfile ? '保存中…' : '保存する'}
+            </button>
+          </div>
+        </>
+      )}
+
+      {view === 'input' && selectedProfile && (
+        <>
+          <button style={backBtn} onClick={() => setView('home')}>
+            ← 上司一覧に戻る
+          </button>
+          <h1 style={h1}>{selectedProfile.name}への相談</h1>
+          <p style={sub}>今の状況を、思いつくままで大丈夫です。</p>
+
+          <div style={card}>
+            <textarea
+              rows={5}
+              value={situation}
+              onChange={(e) => setSituation(e.target.value)}
+              placeholder="例:納期に3日遅れそうと今日中に伝える必要がある"
+              maxLength={2000}
+              style={{ ...inputStyle, resize: 'none' }}
+            />
+            {error && <p style={{ color: theme.danger, fontSize: 13, margin: '10px 0 0' }}>{error}</p>}
+            <button
+              style={{ ...primaryBtn, width: '100%', marginTop: 12, opacity: situation.trim() ? 1 : 0.5 }}
+              onClick={runAnalysis}
+              disabled={!situation.trim()}
+            >
+              言い方の候補を見る
+            </button>
+          </div>
+        </>
+      )}
+
+      {view === 'loading' && (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: 360,
+          }}
+        >
+          <div style={{ display: 'flex', gap: 6, marginBottom: 20 }}>
+            {[0, 1, 2].map((i) => (
+              <span
+                key={i}
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  background: theme.accent,
+                  display: 'inline-block',
+                  animation: 'htDot 1.2s infinite',
+                  animationDelay: `${i * 0.15}s`,
+                }}
+              />
+            ))}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start' }}>
+            {LOADING_MESSAGES.map((msg, i) => (
+              <p
+                key={msg}
+                style={{
+                  margin: 0,
+                  fontSize: 13,
+                  color: i <= loadingStep ? theme.ink : theme.inkMuted,
+                  opacity: i <= loadingStep ? 1 : 0.4,
+                }}
+              >
+                {i < loadingStep ? '✓ ' : i === loadingStep ? '・ ' : '　 '}
+                {msg}
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {view === 'results' && candidates && (
+        <>
+          <button style={backBtn} onClick={() => setView('input')}>
+            ← 状況を入力し直す
+          </button>
+          <h1 style={h1}>言い方の候補</h1>
+          <p style={sub}>タップすると、リスク予測の根拠が開きます。</p>
+
+          {error && <p style={{ color: theme.danger, fontSize: 13, margin: '0 0 12px' }}>{error}</p>}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {candidates.map((c, idx) => {
+              const trust = riskColors(c.risk?.trust?.level);
+              const tone = riskColors(c.risk?.tone?.level);
+              const expanded = expandedIdx === idx;
+              const outcome = outcomes[idx];
+              return (
+                <div
+                  key={idx}
+                  style={{
+                    ...card,
+                    borderColor: c.recommended ? theme.accent : theme.border,
+                    borderWidth: c.recommended ? 2 : 1,
+                  }}
+                >
+                  {c.recommended && (
+                    <span
+                      style={{
+                        display: 'inline-block',
+                        background: theme.accentSoft,
+                        color: theme.accent,
+                        fontSize: 11,
+                        padding: '3px 8px',
+                        borderRadius: 6,
+                        marginBottom: 8,
+                      }}
+                    >
+                      おすすめ
+                    </span>
+                  )}
+                  <p style={{ margin: '0 0 8px', fontSize: 15, fontWeight: 600 }}>{c.type}</p>
+                  <p style={{ margin: '0 0 12px', fontSize: 14, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                    {c.message}
+                  </p>
+
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+                    <span
+                      style={{
+                        fontSize: 12,
+                        padding: '4px 10px',
+                        borderRadius: 6,
+                        background: trust.bg,
+                        color: trust.fg,
+                      }}
+                    >
+                      信頼:{c.risk?.trust?.level}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 12,
+                        padding: '4px 10px',
+                        borderRadius: 6,
+                        background: tone.bg,
+                        color: tone.fg,
+                      }}
+                    >
+                      温度感:{c.risk?.tone?.level}
+                    </span>
+                  </div>
+
+                  <button
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: theme.accent,
+                      fontSize: 12,
+                      cursor: 'pointer',
+                      padding: 0,
+                      marginBottom: expanded ? 10 : 0,
+                    }}
+                    onClick={() => setExpandedIdx(expanded ? null : idx)}
+                  >
+                    {expanded ? '詳細を閉じる ▲' : 'なぜそう予測したか見る ▼'}
+                  </button>
+
+                  {expanded && (
+                    <div
+                      style={{
+                        background: theme.surfaceAlt,
+                        borderRadius: 8,
+                        padding: 12,
+                        marginBottom: 10,
+                        fontSize: 13,
+                        lineHeight: 1.7,
+                      }}
+                    >
+                      <p style={{ margin: '0 0 6px' }}>信頼: {c.risk?.trust?.reason}</p>
+                      <p style={{ margin: '0 0 6px' }}>温度感: {c.risk?.tone?.reason}</p>
+                      <p style={{ margin: 0 }}>今後の対応: {c.risk?.follow_up}</p>
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      style={{ ...ghostBtn, flex: 1, padding: '8px 10px', fontSize: 12 }}
+                      onClick={() => copyText(c.message)}
+                    >
+                      コピーする
+                    </button>
+                  </div>
+
+                  <div style={{ marginTop: 10, borderTop: `1px solid ${theme.border}`, paddingTop: 10 }}>
+                    <p style={{ margin: '0 0 8px', fontSize: 12, color: theme.inkMuted }}>
+                      {outcome
+                        ? '記録しました。次回の予測に活かします。'
+                        : 'これを使った場合、結果を記録しておくと次回の精度が上がります。'}
+                    </p>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {OUTCOMES.map((label) => (
+                        <button
+                          key={label}
+                          onClick={() => recordOutcome(idx, c, label)}
+                          style={{
+                            flex: 1,
+                            fontSize: 12,
+                            padding: '7px 4px',
+                            borderRadius: 8,
+                            border: `1px solid ${outcome === label ? theme.accent : theme.border}`,
+                            background: outcome === label ? theme.accentSoft : '#fff',
+                            color: outcome === label ? theme.accent : theme.inkMuted,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
