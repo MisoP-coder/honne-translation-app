@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 
 import { createClient } from '@/lib/supabase/client';
+import HeaderIllustration from '@/components/HeaderIllustration';
 import {
   TRAIT_QUESTIONS,
   OUTCOMES,
@@ -279,18 +280,7 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
     <div className="ht-shell">
       {view === 'home' && (
         <>
-          <header
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'flex-start',
-              marginBottom: 16,
-            }}
-          >
-            <div>
-              <h1 style={h1}>言いにくいことの翻訳</h1>
-              <p style={{ ...sub, margin: 0 }}>上司を選んで、今の状況を相談してみましょう。</p>
-            </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 2 }}>
             <form action="/auth/signout" method="post">
               <button
                 type="submit"
@@ -307,6 +297,14 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
                 ログアウト
               </button>
             </form>
+          </div>
+
+          <header style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <h1 style={h1}>言いにくいことの翻訳</h1>
+              <p style={{ ...sub, margin: 0 }}>上司を選んで、今の状況を相談してみましょう。</p>
+            </div>
+            <HeaderIllustration />
           </header>
 
           {userEmail && (
