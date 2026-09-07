@@ -21,6 +21,21 @@ import {
   inputStyle,
 } from '@/lib/theme';
 
+const GUIDE_STEPS = [
+  {
+    title: '上司を登録する',
+    body: '呼び名と、5つの質問に答えるだけです。あとから何度でも編集できます。',
+  },
+  {
+    title: '状況を書いて候補を見る',
+    body: '「納期に3日遅れそう」のような書きかけの文章で大丈夫です。トーンの違う言い方が3つと、それぞれの影響予測が出ます。',
+  },
+  {
+    title: '使った結果を記録する',
+    body: 'うまくいった / 様子見 / こじれた の3択です。同じ上司で3件たまると、一般論ではなくその人に効いた言い方をもとに予測するようになります。',
+  },
+];
+
 export default function HonneApp({ userEmail, initialProfiles, initialRecords }) {
   const supabaseRef = useRef(null);
   const getSupabase = () => {
@@ -29,6 +44,7 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
   };
 
   const [view, setView] = useState('home');
+  const [showGuide, setShowGuide] = useState(initialProfiles.length === 0);
   const [profiles, setProfiles] = useState(initialProfiles);
   const [records, setRecords] = useState(initialRecords);
 
@@ -251,6 +267,74 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
           )}
 
           {error && <p style={{ color: theme.danger, fontSize: 13, margin: '0 0 12px' }}>{error}</p>}
+
+          <div style={{ ...card, padding: showGuide ? 16 : '12px 16px', marginBottom: 16 }}>
+            <button
+              onClick={() => setShowGuide((v) => !v)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                width: '100%',
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                cursor: 'pointer',
+                color: theme.ink,
+                fontSize: 14,
+                fontWeight: 600,
+              }}
+            >
+              使い方
+              <span style={{ color: theme.inkMuted, fontSize: 12, fontWeight: 400 }}>
+                {showGuide ? '閉じる ▲' : '開く ▼'}
+              </span>
+            </button>
+
+            {showGuide && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 14 }}>
+                {GUIDE_STEPS.map((step, i) => (
+                  <div key={step.title} style={{ display: 'flex', gap: 10 }}>
+                    <span
+                      style={{
+                        flexShrink: 0,
+                        width: 22,
+                        height: 22,
+                        borderRadius: '50%',
+                        background: theme.accentSoft,
+                        color: theme.accent,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      {i + 1}
+                    </span>
+                    <div>
+                      <p style={{ margin: '2px 0 4px', fontSize: 13, fontWeight: 600 }}>{step.title}</p>
+                      <p style={{ margin: 0, fontSize: 12, color: theme.inkMuted, lineHeight: 1.7 }}>
+                        {step.body}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                <p
+                  style={{
+                    margin: 0,
+                    paddingTop: 12,
+                    borderTop: `1px solid ${theme.border}`,
+                    fontSize: 11,
+                    color: theme.inkMuted,
+                    lineHeight: 1.7,
+                  }}
+                >
+                  入力した内容は、あなたのアカウントからのみ見られます。上司本人に通知が行くことはありません。
+                </p>
+              </div>
+            )}
+          </div>
 
           {profiles.length === 0 && (
             <div style={{ ...card, textAlign: 'center', color: theme.inkMuted, marginBottom: 16 }}>
