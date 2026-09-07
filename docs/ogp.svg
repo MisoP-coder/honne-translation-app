@@ -53,8 +53,8 @@
   <g>
     <!-- 椅子の背 -->
     <rect x="1042" y="228" width="26" height="150" rx="12" fill="#9FB6C9"/>
-    <!-- 胴体 -->
-    <path d="M950 500 L950 372 Q950 330 1000 322 Q1050 330 1050 372 L1050 500 Z" fill="#3E5A75"/>
+    <!-- 胴体(肩を張った姿勢) -->
+    <path d="M944 500 L944 370 Q944 328 1000 320 Q1056 328 1056 370 L1056 500 Z" fill="#3E5A75"/>
     <!-- 襟とシャツ -->
     <path d="M985 326 L1000 360 L1015 326 L1008 320 L992 320 Z" fill="#F2F6FA"/>
     <path d="M998 352 L1002 352 L1004 392 L996 392 Z" fill="#2B6099"/>
@@ -64,6 +64,9 @@
     <circle cx="1000" cy="272" r="40" fill="#EFCBA6"/>
     <!-- 髪 -->
     <path d="M962 268 Q964 228 1000 228 Q1036 228 1038 268 Q1030 246 1000 246 Q970 246 962 268 Z" fill="#2A3340"/>
+    <!-- 眉。内側を下げた直線で険しい表情にする -->
+    <path d="M977 261 L995 272" stroke="#2A3340" stroke-width="6" stroke-linecap="round" fill="none"/>
+    <path d="M1023 261 L1005 272" stroke="#2A3340" stroke-width="6" stroke-linecap="round" fill="none"/>
     <!-- 腕(机の上で組んでいる) -->
     <path d="M950 400 Q930 420 936 450 L1064 450 Q1070 420 1050 400 Z" fill="#35506A"/>
   </g>
@@ -88,10 +91,19 @@
     <path d="M811 342 L815 342 L817 378 L809 378 Z" fill="#1C2836"/>
     <!-- 首 -->
     <rect x="802" y="286" width="22" height="28" rx="9" fill="#E5BC97"/>
-    <!-- 頭(少しうつむいている) -->
-    <circle cx="813" cy="262" r="38" fill="#EFCBA6"/>
-    <!-- 髪 -->
-    <path d="M777 258 Q779 220 813 220 Q847 220 849 258 Q841 236 813 236 Q785 236 777 258 Z" fill="#2A3340"/>
+    <!-- 頭。首元を軸に少し傾けて、ためらっている様子にする -->
+    <g transform="rotate(-7 813 292)">
+      <circle cx="813" cy="262" r="38" fill="#EFCBA6"/>
+      <!-- 髪 -->
+      <path d="M777 258 Q779 220 813 220 Q847 220 849 258 Q841 236 813 236 Q785 236 777 258 Z" fill="#2A3340"/>
+      <!-- 眉。外側を下げた八の字の直線で困り顔にする -->
+      <path d="M791 268 L808 258" stroke="#2A3340" stroke-width="6" stroke-linecap="round" fill="none"/>
+      <path d="M835 268 L818 258" stroke="#2A3340" stroke-width="6" stroke-linecap="round" fill="none"/>
+      <!-- 汗 -->
+      <path d="M849 252 Q859 268 849 274 Q839 268 849 252 Z" fill="#8FBEE2"/>
+      <path d="M846 265 Q847 259 850 256" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round"
+            fill="none" opacity="0.8"/>
+    </g>
     <!-- 両腕 -->
     <rect x="770" y="352" width="17" height="64" rx="8" fill="#2B6099"/>
     <rect x="839" y="352" width="17" height="64" rx="8" fill="#2B6099"/>
