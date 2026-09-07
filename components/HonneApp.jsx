@@ -8,6 +8,9 @@ import {
   OUTCOMES,
   LOADING_MESSAGES,
   RECORDS_THRESHOLD,
+  SHARE_TARGETS,
+  SHARE_TEXT,
+  SITE_URL,
   emptyTraits,
   normalizeTraits,
 } from '@/lib/constants';
@@ -57,6 +60,8 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
   const [expandedIdx, setExpandedIdx] = useState(null);
   const [savingOutcome, setSavingOutcome] = useState(false);
   const [recorded, setRecorded] = useState(null);
+  const [historyProfileId, setHistoryProfileId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState(null);
 
   const stepTimerRef = useRef(null);
@@ -211,6 +216,42 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
       setSavingOutcome(false);
     }
   };
+
+  // --- 実績の確認と削除 -----------------------------------------------------
+
+  const openHistory = (profileId) => {
+    setHistoryProfileId(profileId);
+    setError(null);
+    setView('history');
+  };
+
+  const profileRecords = (profileId) =>
+    records
+      .filter((r) => r.profile_id === profileId)
+      .slice()
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+  const deleteRecord = async (recordId) => {
+    if (deletingId) return;
+    if (!window.confirm('この実績を削除しますか?次回以降の予測から除かれます。')) return;
+
+    setDeletingId(recordId);
+    setError(null);
+    try {
+      const { error: deleteError } = await getSupabase()
+        .from('outcome_records')
+        .delete()
+        .eq('id', recordId);
+      if (deleteError) throw deleteError;
+      setRecords((prev) => prev.filter((r) => r.id !== recordId));
+    } catch (e) {
+      setError(e?.message || '削除に失敗しました。');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const shareUrl = () => (typeof window === 'undefined' ? SITE_URL : window.location.origin);
 
   const copyText = async (text) => {
     try {
@@ -382,11 +423,30 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
                   <p style={{ margin: '0 0 6px', fontSize: 12, color: theme.inkMuted }}>
                     {traits.reaction} ・ {traits.order} ・ {traits.channel}
                   </p>
-                  <p style={{ margin: '0 0 12px', fontSize: 11, color: theme.inkMuted }}>
-                    {count >= RECORDS_THRESHOLD
-                      ? `実績${count}件をもとに予測します`
-                      : `実績${count}件(あと${RECORDS_THRESHOLD - count}件でこの上司専用の予測になります)`}
-                  </p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 0 12px' }}>
+                    <p style={{ margin: 0, fontSize: 11, color: theme.inkMuted }}>
+                      {count >= RECORDS_THRESHOLD
+                        ? `実績${count}件をもとに予測します`
+                        : `実績${count}件(あと${RECORDS_THRESHOLD - count}件でこの上司専用の予測になります)`}
+                    </p>
+                    {count > 0 && (
+                      <button
+                        onClick={() => openHistory(p.id)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: theme.accent,
+                          fontSize: 11,
+                          cursor: 'pointer',
+                          padding: 0,
+                          textDecoration: 'underline',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        確認・削除
+                      </button>
+                    )}
+                  </div>
                   <button style={{ ...primaryBtn, width: '100%' }} onClick={() => startInput(p.id)}>
                     この上司に相談する
                   </button>
@@ -398,6 +458,120 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
           <button style={{ ...ghostBtn, width: '100%' }} onClick={startNewProfile}>
             + 新しい上司を登録する
           </button>
+
+          <div style={{ ...card, marginTop: 24 }}>
+            <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 600 }}>このアプリをシェアする</p>
+            <p style={{ margin: '0 0 12px', fontSize: 11, color: theme.inkMuted, lineHeight: 1.7 }}>
+              紹介文が自動で入ります。あなたの上司の情報や相談内容は含まれません。
+            </p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {SHARE_TARGETS.map((target) => (
+                <a
+                  key={target.key}
+                  href={target.build(shareUrl(), SHARE_TEXT)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    ...ghostBtn,
+                    flex: 1,
+                    padding: '9px 4px',
+                    fontSize: 12,
+                    textAlign: 'center',
+                    textDecoration: 'none',
+                  }}
+                >
+                  {target.label}
+                </a>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      {view === 'history' && historyProfileId && (
+        <>
+          <button
+            style={backBtn}
+            onClick={() => {
+              setHistoryProfileId(null);
+              setView('home');
+            }}
+          >
+            ← 上司一覧に戻る
+          </button>
+          <h1 style={h1}>{profiles.find((p) => p.id === historyProfileId)?.name}の実績</h1>
+          <p style={sub}>
+            ここに残っている記録が、次回の予測の材料になります。誤って記録したものは削除できます。
+          </p>
+
+          {error && <p style={{ color: theme.danger, fontSize: 13, margin: '0 0 12px' }}>{error}</p>}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {profileRecords(historyProfileId).map((r) => {
+              const colors = riskColors(r.outcome === 'うまくいった' ? '向上' : r.outcome === '様子見' ? '維持' : '悪化');
+              return (
+                <div key={r.id} style={{ ...card, padding: 14 }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginBottom: 8,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 12,
+                        padding: '3px 10px',
+                        borderRadius: 6,
+                        background: colors.bg,
+                        color: colors.fg,
+                      }}
+                    >
+                      {r.outcome}
+                    </span>
+                    <span style={{ fontSize: 11, color: theme.inkMuted }}>
+                      {new Date(r.created_at).toLocaleString('ja-JP', {
+                        month: 'numeric',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </span>
+                  </div>
+
+                  <p style={{ margin: '0 0 6px', fontSize: 13, lineHeight: 1.6 }}>{r.situation}</p>
+                  <p style={{ margin: '0 0 10px', fontSize: 11, color: theme.inkMuted, lineHeight: 1.6 }}>
+                    {r.candidate_type ? `${r.candidate_type}:` : ''}
+                    {r.message.length > 60 ? `${r.message.slice(0, 60)}…` : r.message}
+                  </p>
+
+                  <button
+                    onClick={() => deleteRecord(r.id)}
+                    disabled={deletingId === r.id}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: theme.danger,
+                      fontSize: 12,
+                      cursor: 'pointer',
+                      padding: 0,
+                      textDecoration: 'underline',
+                      opacity: deletingId === r.id ? 0.5 : 1,
+                    }}
+                  >
+                    {deletingId === r.id ? '削除中…' : 'この実績を削除する'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          {profileRecords(historyProfileId).length === 0 && (
+            <div style={{ ...card, textAlign: 'center', color: theme.inkMuted, fontSize: 13 }}>
+              実績はまだありません。
+            </div>
+          )}
         </>
       )}
 
