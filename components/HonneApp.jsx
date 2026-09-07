@@ -55,7 +55,8 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
   const [loadingStep, setLoadingStep] = useState(0);
   const [candidates, setCandidates] = useState(null);
   const [expandedIdx, setExpandedIdx] = useState(null);
-  const [outcomes, setOutcomes] = useState({});
+  const [savingOutcome, setSavingOutcome] = useState(false);
+  const [recorded, setRecorded] = useState(null);
   const [error, setError] = useState(null);
 
   const stepTimerRef = useRef(null);
@@ -135,7 +136,7 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
     setSelectedProfileId(profileId);
     setSituation('');
     setCandidates(null);
-    setOutcomes({});
+    setRecorded(null);
     setError(null);
     setView('input');
   };
@@ -164,7 +165,7 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
       clearInterval(stepTimerRef.current);
       setCandidates(data.candidates || []);
       setExpandedIdx(null);
-      setOutcomes({});
+      setRecorded(null);
       setView('results');
     } catch (e) {
       clearInterval(stepTimerRef.current);
@@ -173,10 +174,12 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
     }
   };
 
-  const recordOutcome = async (idx, candidate, outcome) => {
-    if (!selectedProfile) return;
-    const previous = outcomes[idx];
-    setOutcomes((prev) => ({ ...prev, [idx]: outcome }));
+  const recordOutcome = async (candidate, outcome) => {
+    // 1回の相談につき記録は1件。保存中の連打も、保存後の押し直しも受け付けない
+    if (!selectedProfile || savingOutcome || recorded) return;
+
+    setSavingOutcome(true);
+    setError(null);
 
     const supabase = getSupabase();
     try {
@@ -200,9 +203,12 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
       if (insertError) throw insertError;
 
       setRecords((prev) => [data, ...prev]);
+      setRecorded({ outcome, type: candidate.type ?? '' });
+      setView('recorded');
     } catch (e) {
-      setOutcomes((prev) => ({ ...prev, [idx]: previous }));
       setError(e?.message || '記録の保存に失敗しました。');
+    } finally {
+      setSavingOutcome(false);
     }
   };
 
@@ -583,7 +589,6 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
               const trust = riskColors(c.risk?.trust?.level);
               const tone = riskColors(c.risk?.tone?.level);
               const expanded = expandedIdx === idx;
-              const outcome = outcomes[idx];
               return (
                 <div
                   key={idx}
@@ -681,23 +686,23 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
 
                   <div style={{ marginTop: 10, borderTop: `1px solid ${theme.border}`, paddingTop: 10 }}>
                     <p style={{ margin: '0 0 8px', fontSize: 12, color: theme.inkMuted }}>
-                      {outcome
-                        ? '記録しました。次回の予測に活かします。'
-                        : 'これを使った場合、結果を記録しておくと次回の精度が上がります。'}
+                      この言い方を使ったら、結果を記録しておくと次回の精度が上がります。
                     </p>
                     <div style={{ display: 'flex', gap: 6 }}>
                       {OUTCOMES.map((label) => (
                         <button
                           key={label}
-                          onClick={() => recordOutcome(idx, c, label)}
+                          onClick={() => recordOutcome(c, label)}
+                          disabled={savingOutcome}
                           style={{
                             flex: 1,
                             fontSize: 12,
                             padding: '7px 4px',
                             borderRadius: 8,
-                            border: `1px solid ${outcome === label ? theme.accent : theme.border}`,
-                            background: outcome === label ? theme.accentSoft : '#fff',
-                            color: outcome === label ? theme.accent : theme.inkMuted,
+                            border: `1px solid ${theme.border}`,
+                            background: '#fff',
+                            color: theme.inkMuted,
+                            opacity: savingOutcome ? 0.5 : 1,
                             cursor: 'pointer',
                           }}
                         >
@@ -711,6 +716,58 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
             })}
           </div>
         </>
+      )}
+
+      {view === 'recorded' && recorded && selectedProfile && (
+        <div style={{ display: 'flex', flexDirection: 'column', minHeight: 420, justifyContent: 'center' }}>
+          <div style={{ ...card, textAlign: 'center', padding: '28px 20px' }}>
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 48,
+                height: 48,
+                borderRadius: '50%',
+                background: theme.accentSoft,
+                color: theme.accent,
+                fontSize: 22,
+                marginBottom: 14,
+              }}
+            >
+              ✓
+            </span>
+            <h1 style={{ ...h1, fontSize: 19, margin: '0 0 8px' }}>記録しました</h1>
+            <p style={{ margin: '0 0 4px', fontSize: 14 }}>
+              {selectedProfile.name}への「{recorded.type}」を
+              <br />
+              「{recorded.outcome}」として記録しました。
+            </p>
+            <p style={{ margin: '12px 0 0', fontSize: 12, color: theme.inkMuted, lineHeight: 1.7 }}>
+              {(() => {
+                const count = recordCount(selectedProfile.id);
+                return count >= RECORDS_THRESHOLD
+                  ? `実績は${count}件になりました。次回からもこの実績をもとに予測します。`
+                  : `実績は${count}件になりました。あと${RECORDS_THRESHOLD - count}件で、この上司専用の予測に切り替わります。`;
+              })()}
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
+            <button style={{ ...primaryBtn, width: '100%' }} onClick={() => startInput(selectedProfile.id)}>
+              同じ上司にもう一度相談する
+            </button>
+            <button
+              style={{ ...ghostBtn, width: '100%' }}
+              onClick={() => {
+                setRecorded(null);
+                setView('home');
+              }}
+            >
+              上司一覧に戻る
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
