@@ -194,5 +194,8 @@ function translateAuthError(error) {
   if (message.toLowerCase().includes('rate limit')) {
     return '試行回数が多すぎます。少し時間をおいてからお試しください。';
   }
+  if (message.includes('Invalid path') || message.includes('requested path is invalid')) {
+    return '接続先の設定が正しくないようです(NEXT_PUBLIC_SUPABASE_URL を確認してください)。';
+  }
   return message || 'うまくいきませんでした。もう一度お試しください。';
 }
