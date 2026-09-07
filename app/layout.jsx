@@ -8,7 +8,7 @@ export const metadata = {
   metadataBase: new URL(SITE_URL),
   title: TITLE,
   description: SHARE_TEXT,
-  // SNS でリンクを共有したときに、タイトルと説明文が表示されるようにする
+  // SNS でリンクを共有したときに、タイトル・説明文・アイキャッチが表示されるようにする
   openGraph: {
     type: 'website',
     siteName: TITLE,
@@ -16,11 +16,13 @@ export const metadata = {
     description: SHARE_TEXT,
     url: SITE_URL,
     locale: 'ja_JP',
+    images: [{ url: '/ogp.png', width: 1200, height: 630, alt: `${TITLE} のアイキャッチ` }],
   },
   twitter: {
-    card: 'summary',
+    card: 'summary_large_image',
     title: TITLE,
     description: SHARE_TEXT,
+    images: ['/ogp.png'],
   },
 };
 
