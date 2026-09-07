@@ -9,7 +9,7 @@ import { RECORDS_THRESHOLD, normalizeTraits } from '@/lib/constants';
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-const MODEL = 'claude-opus-5';
+const MODEL = 'claude-sonnet-5';
 const MAX_SITUATION_LENGTH = 2000;
 /** プロンプトに載せる直近の実績データ件数 */
 const RECORDS_IN_PROMPT = 8;
@@ -145,12 +145,9 @@ export async function POST(request) {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
   try {
-    const response = await client.beta.messages.parse({
+    const response = await client.messages.parse({
       model: MODEL,
       max_tokens: 8000,
-      // 安全性フィルタで断られた場合に、同じリクエストを別モデルで自動的に再実行する
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: buildUserPrompt({ profile, records, situation }) }],
       output_config: {
