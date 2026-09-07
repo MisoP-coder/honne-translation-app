@@ -1,9 +1,27 @@
 import './globals.css';
 
+import { SITE_URL, SHARE_TEXT } from '@/lib/constants';
+
+const TITLE = '言いにくいことの翻訳';
+
 export const metadata = {
-  title: '言いにくいことの翻訳',
-  description:
-    '上司に言いにくい報告・相談を、相手のタイプと過去の実績に合わせた言い方に翻訳するアプリ',
+  metadataBase: new URL(SITE_URL),
+  title: TITLE,
+  description: SHARE_TEXT,
+  // SNS でリンクを共有したときに、タイトルと説明文が表示されるようにする
+  openGraph: {
+    type: 'website',
+    siteName: TITLE,
+    title: TITLE,
+    description: SHARE_TEXT,
+    url: SITE_URL,
+    locale: 'ja_JP',
+  },
+  twitter: {
+    card: 'summary',
+    title: TITLE,
+    description: SHARE_TEXT,
+  },
 };
 
 export const viewport = {
