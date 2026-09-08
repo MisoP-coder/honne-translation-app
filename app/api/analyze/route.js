@@ -11,6 +11,12 @@ export const maxDuration = 60;
 
 const MODEL = 'claude-sonnet-5';
 const MAX_SITUATION_LENGTH = 2000;
+/**
+ * 1人あたりの1日の上限。
+ * 無料枠のための制限ではなく、連打や不具合で原価が暴走する事故を防ぐためのもの。
+ * 通常の使い方でここに当たることはない。
+ */
+const DAILY_LIMIT = 20;
 /** プロンプトに載せる直近の実績データ件数 */
 const RECORDS_IN_PROMPT = 8;
 
@@ -86,6 +92,13 @@ function buildUserPrompt({ profile, records, situation, channel }) {
   );
 }
 
+/** 日本時間の0時を、その日の始まりとして返す */
+function startOfTodayJst() {
+  const shifted = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  shifted.setUTCHours(0, 0, 0, 0);
+  return new Date(shifted.getTime() - 9 * 60 * 60 * 1000);
+}
+
 /** recommended がゼロ個/複数個で返ってきた場合にちょうど1つへ整える */
 function normalizeCandidates(candidates) {
   const list = candidates.slice(0, 3);
@@ -128,6 +141,23 @@ export async function POST(request) {
     return NextResponse.json(
       { error: `状況は${MAX_SITUATION_LENGTH}文字以内で入力してください。` },
       { status: 400 }
+    );
+  }
+
+  // 事故防止の上限。数えるのは成功した生成だけ(ログは成功時にのみ書かれる)
+  const { count: todayCount, error: countError } = await supabase
+    .from('analysis_logs')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', user.id)
+    .gte('created_at', startOfTodayJst().toISOString());
+
+  if (countError) {
+    // 数えられなかったときは止めない。上限は事故防止であって課金の線引きではない
+    console.error('利用回数の集計に失敗しました', countError);
+  } else if ((todayCount ?? 0) >= DAILY_LIMIT) {
+    return NextResponse.json(
+      { error: `1日に作成できる回数の上限(${DAILY_LIMIT}回)に達しました。日付が変わるとまた使えます。` },
+      { status: 429 }
     );
   }
 
