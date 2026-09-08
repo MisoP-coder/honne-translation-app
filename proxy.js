@@ -31,11 +31,13 @@ export async function proxy(request) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
-  const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/auth');
+  // / は未ログインなら紹介ページを出すため、リダイレクトの対象から外す
+  const isPublicRoute =
+    pathname === '/' || pathname.startsWith('/login') || pathname.startsWith('/auth');
   // API は HTML へのリダイレクトではなく、ルート側で 401 の JSON を返させる
   const isApiRoute = pathname.startsWith('/api');
 
-  if (!user && !isAuthRoute && !isApiRoute) {
+  if (!user && !isPublicRoute && !isApiRoute) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     url.searchParams.set('redirectedFrom', pathname);

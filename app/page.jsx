@@ -1,7 +1,6 @@
-import { redirect } from 'next/navigation';
-
 import { createClient } from '@/lib/supabase/server';
 import HonneApp from '@/components/HonneApp';
+import LandingPage from '@/components/LandingPage';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,7 +10,8 @@ export default async function Home() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect('/login');
+  // 未ログインの訪問者には、いきなりログインを求めず紹介ページを見せる
+  if (!user) return <LandingPage />;
 
   const [{ data: profiles }, { data: records }] = await Promise.all([
     supabase
