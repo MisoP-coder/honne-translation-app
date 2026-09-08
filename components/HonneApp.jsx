@@ -9,6 +9,8 @@ import {
   OUTCOMES,
   LOADING_MESSAGES,
   RECORDS_THRESHOLD,
+  CHANNELS,
+  defaultChannel,
   SHARE_TARGETS,
   SHARE_TEXT,
   SITE_URL,
@@ -56,6 +58,7 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
   const [savingProfile, setSavingProfile] = useState(false);
   const [selectedProfileId, setSelectedProfileId] = useState(null);
   const [situation, setSituation] = useState('');
+  const [channel, setChannel] = useState(CHANNELS[0]);
   const [loadingStep, setLoadingStep] = useState(0);
   const [candidates, setCandidates] = useState(null);
   const [expandedIdx, setExpandedIdx] = useState(null);
@@ -139,7 +142,9 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
   // --- 相談 ---------------------------------------------------------------
 
   const startInput = (profileId) => {
+    const profile = profiles.find((p) => p.id === profileId);
     setSelectedProfileId(profileId);
+    setChannel(defaultChannel(profile?.traits));
     setSituation('');
     setCandidates(null);
     setRecorded(null);
@@ -163,7 +168,11 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
       const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ profileId: selectedProfile.id, situation: situation.trim() }),
+        body: JSON.stringify({
+          profileId: selectedProfile.id,
+          situation: situation.trim(),
+          channel,
+        }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data?.error || '候補の生成に失敗しました。');
@@ -202,9 +211,10 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
           situation: situation.trim(),
           message: candidate.message,
           candidate_type: candidate.type ?? '',
+          channel,
           outcome,
         })
-        .select('id, profile_id, situation, message, candidate_type, outcome, created_at')
+        .select('id, profile_id, situation, message, candidate_type, channel, outcome, created_at')
         .single();
       if (insertError) throw insertError;
 
@@ -540,6 +550,7 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
 
                   <p style={{ margin: '0 0 6px', fontSize: 13, lineHeight: 1.6 }}>{r.situation}</p>
                   <p style={{ margin: '0 0 10px', fontSize: 11, color: theme.inkMuted, lineHeight: 1.6 }}>
+                    {r.channel ? `${r.channel} / ` : ''}
                     {r.candidate_type ? `${r.candidate_type}:` : ''}
                     {r.message.length > 60 ? `${r.message.slice(0, 60)}…` : r.message}
                   </p>
@@ -681,6 +692,38 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
           <p style={sub}>今の状況を、思いつくままで大丈夫です。</p>
 
           <div style={card}>
+            <p style={{ fontSize: 13, color: theme.inkMuted, margin: '0 0 8px' }}>今回の伝え方</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
+              {CHANNELS.map((c) => {
+                const active = channel === c;
+                return (
+                  <button
+                    key={c}
+                    className="ht-toggle"
+                    onClick={() => setChannel(c)}
+                    style={{
+                      padding: '10px 8px',
+                      borderRadius: 8,
+                      border: `1px solid ${active ? theme.accent : theme.border}`,
+                      background: active ? theme.accentSoft : '#fff',
+                      color: active ? theme.accent : theme.ink,
+                      fontSize: 13,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {c}
+                  </button>
+                );
+              })}
+            </div>
+            {channel !== defaultChannel(selectedProfile.traits) && (
+              <p style={{ fontSize: 11, color: theme.caution, margin: '-8px 0 14px', lineHeight: 1.6 }}>
+                {selectedProfile.name}が好むのは
+                {normalizeTraits(selectedProfile.traits).channel}です。その点も踏まえて予測します。
+              </p>
+            )}
+
+            <p style={{ fontSize: 13, color: theme.inkMuted, margin: '0 0 8px' }}>今の状況</p>
             <textarea
               rows={5}
               value={situation}
