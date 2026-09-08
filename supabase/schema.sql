@@ -102,3 +102,38 @@ create policy "outcome_records_insert_own" on public.outcome_records
 drop policy if exists "outcome_records_delete_own" on public.outcome_records;
 create policy "outcome_records_delete_own" on public.outcome_records
   for delete using (auth.uid() = user_id);
+
+-- ---------------------------------------------------------------------------
+-- 利用ログ
+--   1回の候補生成ごとに1行。何人が何回使い、原価がいくらかかったかを見るため。
+--   相談内容そのものは保存しない(必要な文面は outcome_records 側にある)。
+-- ---------------------------------------------------------------------------
+create table if not exists public.analysis_logs (
+  id                uuid primary key default gen_random_uuid(),
+  user_id           uuid not null references auth.users (id) on delete cascade,
+  profile_id        uuid references public.boss_profiles (id) on delete set null,
+  model             text not null,
+  input_tokens      integer not null default 0,
+  output_tokens     integer not null default 0,
+  -- プロンプトに載せた実績データの件数。学習が効いているかの確認用
+  records_in_prompt integer not null default 0,
+  created_at        timestamptz not null default now()
+);
+
+create index if not exists analysis_logs_created_at_idx
+  on public.analysis_logs (created_at desc);
+
+create index if not exists analysis_logs_user_idx
+  on public.analysis_logs (user_id, created_at desc);
+
+alter table public.analysis_logs enable row level security;
+
+-- 集計は SQL Editor(RLS を迂回する権限)から行う。
+-- ユーザー自身には、自分の行の参照と追加だけを許可する。削除は許可しない。
+drop policy if exists "analysis_logs_select_own" on public.analysis_logs;
+create policy "analysis_logs_select_own" on public.analysis_logs
+  for select using (auth.uid() = user_id);
+
+drop policy if exists "analysis_logs_insert_own" on public.analysis_logs;
+create policy "analysis_logs_insert_own" on public.analysis_logs
+  for insert with check (auth.uid() = user_id);

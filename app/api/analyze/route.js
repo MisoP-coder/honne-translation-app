@@ -171,6 +171,18 @@ export async function POST(request) {
       );
     }
 
+    // 利用状況の記録。何人が何回使い、原価がいくらかかったかを見るため。
+    // 相談内容そのものは保存しない。失敗しても本体の応答には影響させない。
+    const { error: logError } = await supabase.from('analysis_logs').insert({
+      user_id: user.id,
+      profile_id: profileId,
+      model: MODEL,
+      input_tokens: response.usage?.input_tokens ?? 0,
+      output_tokens: response.usage?.output_tokens ?? 0,
+      records_in_prompt: records.length,
+    });
+    if (logError) console.error('利用ログの記録に失敗しました', logError);
+
     return NextResponse.json({
       candidates: normalizeCandidates(candidates),
       usedRecordsCount: records.length,
