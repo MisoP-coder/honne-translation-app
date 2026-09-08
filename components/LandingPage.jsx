@@ -221,6 +221,25 @@ export default function LandingPage() {
       >
         すでに登録済みの方も、こちらからログインできます。
       </p>
+
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'center',
+          gap: 16,
+          marginTop: 28,
+          paddingTop: 16,
+          borderTop: `1px solid ${theme.border}`,
+          fontSize: 12,
+        }}
+      >
+        <Link href="/privacy" style={{ color: theme.inkMuted }}>
+          プライバシーポリシー
+        </Link>
+        <Link href="/terms" style={{ color: theme.inkMuted }}>
+          利用規約
+        </Link>
+      </div>
     </div>
   );
 }
