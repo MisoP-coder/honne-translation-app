@@ -11,6 +11,7 @@ import {
   RECORDS_THRESHOLD,
   CHANNELS,
   defaultChannel,
+  channelGroup,
   SHARE_TARGETS,
   SHARE_TEXT,
   SITE_URL,
@@ -693,7 +694,7 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
 
           <div style={card}>
             <p style={{ fontSize: 13, color: theme.inkMuted, margin: '0 0 8px' }}>今回の伝え方</p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginBottom: 16 }}>
               {CHANNELS.map((c) => {
                 const active = channel === c;
                 return (
@@ -702,13 +703,14 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
                     className="ht-toggle"
                     onClick={() => setChannel(c)}
                     style={{
-                      padding: '10px 8px',
+                      padding: '10px 4px',
                       borderRadius: 8,
                       border: `1px solid ${active ? theme.accent : theme.border}`,
                       background: active ? theme.accentSoft : '#fff',
                       color: active ? theme.accent : theme.ink,
                       fontSize: 13,
                       cursor: 'pointer',
+                      whiteSpace: 'nowrap',
                     }}
                   >
                     {c}
@@ -716,7 +718,7 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
                 );
               })}
             </div>
-            {channel !== defaultChannel(selectedProfile.traits) && (
+            {channelGroup(channel) !== normalizeTraits(selectedProfile.traits).channel && (
               <p style={{ fontSize: 11, color: theme.caution, margin: '-8px 0 14px', lineHeight: 1.6 }}>
                 {selectedProfile.name}が好むのは
                 {normalizeTraits(selectedProfile.traits).channel}です。その点も踏まえて予測します。
