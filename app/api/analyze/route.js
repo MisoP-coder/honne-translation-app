@@ -4,19 +4,13 @@ import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { z } from 'zod';
 
 import { createClient } from '@/lib/supabase/server';
-import { RECORDS_THRESHOLD, CHANNELS, normalizeTraits } from '@/lib/constants';
+import { RECORDS_THRESHOLD, CHANNELS, DAILY_LIMIT, normalizeTraits } from '@/lib/constants';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 const MODEL = 'claude-sonnet-5';
 const MAX_SITUATION_LENGTH = 2000;
-/**
- * 1人あたりの1日の上限。
- * 無料枠のための制限ではなく、連打や不具合で原価が暴走する事故を防ぐためのもの。
- * 通常の使い方でここに当たることはない。
- */
-const DAILY_LIMIT = 20;
 /** プロンプトに載せる直近の実績データ件数 */
 const RECORDS_IN_PROMPT = 8;
 

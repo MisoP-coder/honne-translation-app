@@ -494,6 +494,25 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
               ))}
             </div>
           </div>
+
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'center',
+              gap: 16,
+              marginTop: 24,
+              paddingTop: 16,
+              borderTop: `1px solid ${theme.border}`,
+              fontSize: 12,
+            }}
+          >
+            <a href="/privacy" style={{ color: theme.inkMuted }}>
+              プライバシーポリシー
+            </a>
+            <a href="/terms" style={{ color: theme.inkMuted }}>
+              利用規約
+            </a>
+          </div>
         </>
       )}
 

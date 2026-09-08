@@ -33,7 +33,11 @@ export async function proxy(request) {
   const { pathname } = request.nextUrl;
   // / は未ログインなら紹介ページを出すため、リダイレクトの対象から外す
   const isPublicRoute =
-    pathname === '/' || pathname.startsWith('/login') || pathname.startsWith('/auth');
+    pathname === '/' ||
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/auth') ||
+    pathname.startsWith('/privacy') ||
+    pathname.startsWith('/terms');
   // API は HTML へのリダイレクトではなく、ルート側で 401 の JSON を返させる
   const isApiRoute = pathname.startsWith('/api');
 
