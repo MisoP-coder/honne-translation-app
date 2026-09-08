@@ -71,7 +71,16 @@ export default function LegalLayout({ title, children }) {
         }}
       >
         <p style={{ margin: 0 }}>運営者: {OPERATOR.name || '(未記入)'}</p>
-        <p style={{ margin: 0 }}>お問い合わせ: {OPERATOR.contact || '(未記入)'}</p>
+        <p style={{ margin: 0 }}>
+          お問い合わせ:{' '}
+          {OPERATOR.contact ? (
+            <a href={`mailto:${OPERATOR.contact}`} style={{ color: theme.accent }}>
+              {OPERATOR.contact}
+            </a>
+          ) : (
+            '(未記入)'
+          )}
+        </p>
       </div>
 
       <div style={{ marginTop: 20, display: 'flex', gap: 16, fontSize: 12 }}>
