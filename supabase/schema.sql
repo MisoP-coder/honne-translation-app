@@ -137,3 +137,11 @@ create policy "analysis_logs_select_own" on public.analysis_logs
 drop policy if exists "analysis_logs_insert_own" on public.analysis_logs;
 create policy "analysis_logs_insert_own" on public.analysis_logs
   for insert with check (auth.uid() = user_id);
+
+-- ---------------------------------------------------------------------------
+-- 伝え方(口頭 / メール・チャット)の記録
+--   相談ごとに選ぶため、上司プロフィールの「好む連絡手段」とは別に持つ。
+--   既存のテーブルに後から足すので alter で追加する。
+-- ---------------------------------------------------------------------------
+alter table public.outcome_records
+  add column if not exists channel text not null default '';

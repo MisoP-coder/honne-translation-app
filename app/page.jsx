@@ -20,7 +20,7 @@ export default async function Home() {
       .order('created_at', { ascending: true }),
     supabase
       .from('outcome_records')
-      .select('id, profile_id, situation, message, candidate_type, outcome, created_at')
+      .select('id, profile_id, situation, message, candidate_type, channel, outcome, created_at')
       .order('created_at', { ascending: false })
       .limit(200),
   ]);
