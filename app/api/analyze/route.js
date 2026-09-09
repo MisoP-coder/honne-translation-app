@@ -166,12 +166,18 @@ export async function POST(request) {
     return NextResponse.json({ error: '上司プロフィールが見つかりません。' }, { status: 404 });
   }
 
-  const { data: recentRecords } = await supabase
+  const { data: recentRecords, error: recordsError } = await supabase
     .from('outcome_records')
     .select('situation, message, outcome, channel, created_at')
     .eq('profile_id', profileId)
     .order('created_at', { ascending: false })
     .limit(RECORDS_IN_PROMPT);
+
+  // 取得に失敗しても候補は出せるが、黙って「一般論ベース」に落ちてしまい
+  // 実績が効かない原因が分からなくなるため、ログには必ず残す
+  if (recordsError) {
+    console.error('実績の取得に失敗しました', recordsError);
+  }
 
   // 古い順に並べ替えて時系列で読ませる
   const records = (recentRecords ?? []).slice().reverse();
