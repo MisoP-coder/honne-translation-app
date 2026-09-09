@@ -84,7 +84,7 @@ Project URL が見つからないときは、ダッシュボードのアドレ�
 
 > パスワード再設定のリンクもこの **Redirect URLs** を通ります。`https://xxxxx.vercel.app/**` のように末尾を `/**` にしておけば `/auth/callback` も含まれるので、追加の設定は要りません。
 
-Supabase が送るメールは初期状態だと**英語**で、どのアプリからのメールか分かりません。日本語の文面を [`docs/email-templates.md`](docs/email-templates.md) に用意してあるので、**Authentication → Emails → Templates** に貼り付けてください。
+Supabase が送るメールは初期状態だと**英語**で、どのアプリからのメールか分かりません。日本語の文面を [`docs/email-templates.md`](docs/email-templates.md) に用意してあります。ただし**無料プランで標準のメール送信を使っているあいだは編集できない**ので、先に外部 SMTP の登録が必要です。詳しくは同ファイルを参照してください。
 
 ## 7. 動作確認
 
