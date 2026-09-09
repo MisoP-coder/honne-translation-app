@@ -82,6 +82,8 @@ Project URL が見つからないときは、ダッシュボードのアドレ�
 
 さらに **Authentication → Sign In / Providers → Email** の **Confirm email をオフ**にしておくと、登録がその場で完了して確認が楽になります(本番運用時は戻してください)。
 
+> パスワード再設定のリンクもこの **Redirect URLs** を通ります。`https://xxxxx.vercel.app/**` のように末尾を `/**` にしておけば `/auth/callback` も含まれるので、追加の設定は要りません。
+
 ## 7. 動作確認
 
 Vercel の URL を開いて、上から順に確認します。
@@ -113,6 +115,7 @@ Vercel がこのプロジェクトを Next.js だと認識していません。�
 | `Invalid API key` | `NEXT_PUBLIC_SUPABASE_ANON_KEY` が違う値(Project URL と取り違えているなど) |
 | ログイン後すぐログイン画面に戻る | 手順6の URL Configuration が未設定 |
 | メールが届かない | 迷惑メールを確認。無料プランは送信数に制限があるため、Confirm email をオフにするのが早い |
+| 再設定リンクを開くと「リンクの有効期限が切れています」 | リンクの期限切れか、**メールを開いたブラウザが送信時と違う**。スマホでは、メールアプリが自分の内蔵ブラウザで開いてしまうことがあるので、リンクを長押しして Chrome で開く |
 
 **環境変数を直したら、必ず再デプロイしてください。** 値はビルド時にアプリへ埋め込まれるため、保存しただけでは反映されません(Deployments → 最新の「…」→ **Redeploy**)。
 
@@ -143,16 +146,19 @@ Claude API 側の問題です。Anthropic Console の残高と、`ANTHROPIC_API_
 app/
   page.jsx                ホーム(サーバー側でログイン確認 + 初期データ取得)
   login/page.jsx          ログイン画面
-  auth/callback/route.js  メールリンク・確認メールからの戻り先
+  auth/callback/route.js  メールリンク・確認メール・再設定メールからの戻り先
   auth/signout/route.js   ログアウト
+  reset-password/page.jsx 新しいパスワードを決める画面
   api/analyze/route.js    Claude API を呼ぶサーバールート(APIキーはここだけで使用)
 components/
   HonneApp.jsx            アプリ本体(プロトタイプの UI を移植)
-  LoginForm.jsx           ログイン / 新規登録 / メールリンク
+  LoginForm.jsx           ログイン / 新規登録 / メールリンク / 再設定メールの送信
+  ResetPasswordForm.jsx   新しいパスワードの入力フォーム
 lib/
   supabase/client.js      ブラウザ用 Supabase クライアント
   supabase/server.js      サーバー用 Supabase クライアント
   supabase/env.js         接続情報の正規化(末尾スラッシュ・空白の除去)
+  authErrors.js           Supabase の英語エラーを日本語の案内文に変換
   constants.js, theme.js
 proxy.js                  セッション更新と未ログイン時のリダイレクト(Next.js 16 の proxy)
 supabase/schema.sql       テーブル・RLS ポリシー定義
