@@ -109,3 +109,32 @@ select
     100.0 * (select count(*) from public.outcome_records)
           / nullif((select count(*) from public.analysis_logs), 0)
   , 1) as 記録率_パーセント;
+
+-- ----------------------------------------------------------------------------
+-- 7. どこで人が止まっているか(離脱の段階)
+--    analysis_logs に載るのは「候補の生成に成功した人」だけなので、
+--    登録したまま相談していない人は 1〜6 の数字には現れない。
+--    人数が段階ごとに大きく落ちていたら、そこが直すべき場所。
+-- ----------------------------------------------------------------------------
+select '1. アカウント登録' as 段階, count(*)                as 人数 from auth.users
+union all
+select '2. 上司を登録',     count(distinct user_id)         from public.boss_profiles
+union all
+select '3. 相談した',       count(distinct user_id)         from public.analysis_logs
+union all
+select '4. 結果を記録した', count(distinct user_id)         from public.outcome_records
+order by 1;
+
+-- ----------------------------------------------------------------------------
+-- 8. 相談まで進んでいない人の一覧
+--    7 で落ち込みが見えたとき、いつ登録した人が止まっているのかを見る
+-- ----------------------------------------------------------------------------
+select
+  u.id                                                as user_id,
+  (u.created_at at time zone 'Asia/Tokyo')::date      as 登録日,
+  count(distinct b.id)                                as 登録した上司の数
+from auth.users u
+left join public.boss_profiles b on b.user_id = u.id
+where not exists (select 1 from public.analysis_logs a where a.user_id = u.id)
+group by u.id, u.created_at
+order by 登録日;
