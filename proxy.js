@@ -37,7 +37,9 @@ export async function proxy(request) {
     pathname.startsWith('/login') ||
     pathname.startsWith('/auth') ||
     pathname.startsWith('/privacy') ||
-    pathname.startsWith('/terms');
+    pathname.startsWith('/terms') ||
+    // 再設定リンクが切れていた場合に、/login への転送ではなく理由を出したいので公開扱いにする
+    pathname.startsWith('/reset-password');
   // API は HTML へのリダイレクトではなく、ルート側で 401 の JSON を返させる
   const isApiRoute = pathname.startsWith('/api');
 

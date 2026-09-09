@@ -9,7 +9,9 @@ import { createClient } from '@/lib/supabase/server';
 export async function GET(request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
-  const next = searchParams.get('next') ?? '/';
+  // 自サイト内のパスだけを戻り先として認める(外部サイトへの転送に使われないように)
+  const requestedNext = searchParams.get('next') ?? '/';
+  const next = /^\/(?!\/)/.test(requestedNext) ? requestedNext : '/';
 
   if (code) {
     const supabase = await createClient();
