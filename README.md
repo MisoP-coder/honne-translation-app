@@ -84,6 +84,8 @@ Project URL が見つからないときは、ダッシュボードのアドレ�
 
 > パスワード再設定のリンクもこの **Redirect URLs** を通ります。`https://xxxxx.vercel.app/**` のように末尾を `/**` にしておけば `/auth/callback` も含まれるので、追加の設定は要りません。
 
+Supabase が送るメールは初期状態だと**英語**で、どのアプリからのメールか分かりません。日本語の文面を [`docs/email-templates.md`](docs/email-templates.md) に用意してあるので、**Authentication → Emails → Templates** に貼り付けてください。
+
 ## 7. 動作確認
 
 Vercel の URL を開いて、上から順に確認します。
@@ -162,6 +164,7 @@ lib/
   constants.js, theme.js
 proxy.js                  セッション更新と未ログイン時のリダイレクト(Next.js 16 の proxy)
 supabase/schema.sql       テーブル・RLS ポリシー定義
+docs/email-templates.md   Supabase に貼り付けるメール文面(日本語)
 vercel.json               Vercel に Next.js プロジェクトだと伝える
 ```
 
