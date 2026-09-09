@@ -138,3 +138,32 @@ left join public.boss_profiles b on b.user_id = u.id
 where not exists (select 1 from public.analysis_logs a where a.user_id = u.id)
 group by u.id, u.created_at
 order by 登録日;
+
+-- ----------------------------------------------------------------------------
+-- 9. なぜ「実績ベース」に切り替わらないのかを調べる
+--    5 が「一般論ベース」ばかりのときに実行する。
+--    実績は上司ごとに数えるので、相談する上司が分散していると、
+--    合計では3件を超えていても1人あたりでは3件に届かないことがある。
+-- ----------------------------------------------------------------------------
+select
+  b.name                                             as 上司,
+  count(distinct a.id)                               as 相談回数,
+  count(distinct o.id)                               as 記録数,
+  case when count(distinct o.id) >= 3
+       then '実績が効く' else 'あと ' || (3 - count(distinct o.id)) || ' 件' end as 状態
+from public.boss_profiles b
+left join public.analysis_logs   a on a.profile_id = b.id
+left join public.outcome_records o on o.profile_id = b.id
+group by b.id, b.name
+order by 記録数 desc;
+
+-- ----------------------------------------------------------------------------
+-- 10. 記録が上司に正しく結びついているかの確認
+--     outcome_records に channel 列が無いと、実績の取得ごと失敗して
+--     常に「一般論ベース」になる。列が出てこない場合は
+--     supabase/schema.sql を貼り直すこと。
+-- ----------------------------------------------------------------------------
+select column_name as 列名
+from information_schema.columns
+where table_schema = 'public' and table_name = 'outcome_records'
+order by ordinal_position;
