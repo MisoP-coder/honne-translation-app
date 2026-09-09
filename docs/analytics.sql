@@ -4,6 +4,10 @@
 -- 使い方: Supabase ダッシュボード > SQL Editor に貼り付けて実行します。
 --         SQL Editor は RLS を迂回するため、全ユーザーぶんが見えます。
 --
+--         【重要】ファイル全体を一度に貼らず、下の 1〜6 のブロックを
+--         1つずつ貼って実行してください。まとめて実行すると、最後の
+--         結果しか表示されません。
+--
 -- 料金の前提(2026年9月時点、claude-sonnet-5):
 --   入力 $2 / 100万トークン、出力 $10 / 100万トークン、為替 150円/$
 --   モデルや為替を変えたら、下の CTE の数値を書き換えてください。
@@ -21,17 +25,19 @@ select
   round(count(*)::numeric / nullif(count(distinct user_id), 0), 1) as 一人あたり平均回数,
   round(avg(input_tokens))                          as 平均入力トークン,
   round(avg(output_tokens))                         as 平均出力トークン,
+  -- 円換算は avg / sum の「中」で掛ける。外に出すと、集計していない列を
+  -- 参照したことになり "must appear in the GROUP BY clause" で失敗する
   round(
     avg(
-      (input_tokens  * p.usd_per_m_input  / 1000000)
-    + (output_tokens * p.usd_per_m_output / 1000000)
-    ) * p.jpy_per_usd
+      ( (input_tokens  * p.usd_per_m_input  / 1000000)
+      + (output_tokens * p.usd_per_m_output / 1000000) ) * p.jpy_per_usd
+    )
   , 2)                                              as 平均原価_円,
   round(
     sum(
-      (input_tokens  * p.usd_per_m_input  / 1000000)
-    + (output_tokens * p.usd_per_m_output / 1000000)
-    ) * p.jpy_per_usd
+      ( (input_tokens  * p.usd_per_m_input  / 1000000)
+      + (output_tokens * p.usd_per_m_output / 1000000) ) * p.jpy_per_usd
+    )
   , 1)                                              as 累計原価_円
 from public.analysis_logs, price p;
 
@@ -45,7 +51,7 @@ select
   date_trunc('day', created_at at time zone 'Asia/Tokyo')::date as 日付,
   count(*)                as 相談回数,
   count(distinct user_id) as 利用者数,
-  round(sum((input_tokens * p.i / 1000000) + (output_tokens * p.o / 1000000)) * p.jpy, 1) as 原価_円
+  round(sum((((input_tokens * p.i / 1000000) + (output_tokens * p.o / 1000000)) * p.jpy)), 1) as 原価_円
 from public.analysis_logs, price p
 group by 1
 order by 1 desc
@@ -60,7 +66,9 @@ select
   count(*)                                           as 相談回数,
   min(created_at at time zone 'Asia/Tokyo')::date     as 初回,
   max(created_at at time zone 'Asia/Tokyo')::date     as 最終,
-  max(created_at)::date - min(created_at)::date       as 利用日数の幅
+  -- 初回・最終と同じ日本時間で引く(UTC のまま引くと日付がずれる)
+  max(created_at at time zone 'Asia/Tokyo')::date
+  - min(created_at at time zone 'Asia/Tokyo')::date     as 利用日数の幅
 from public.analysis_logs
 group by user_id
 order by 相談回数 desc;
