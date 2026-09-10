@@ -53,7 +53,8 @@ Supabase は無料プランのままで足ります。ただし **7日間まっ�
 1. Vercel のプロジェクトを開き、URL の末尾に **`/settings/domains`** を足して直接開く
 2. 入力欄に **`honne.misop-craft.com`** と入れて **Add**
 3. 「Invalid Configuration」と赤く出ますが、正常です。DNS の設定がまだなので、次の手順で解決します
-4. 画面に表示される **CNAME の値**(`cname.vercel-dns.com` のような文字列)を控える
+4. 画面に表示される **CNAME の値** を控える。このプロジェクトでは
+   `d4e128e559ff7af4.vercel-dns-017.com` でした(プロジェクトごとに違います)
 
 ### 2-2. お名前.com で CNAME を登録する
 
@@ -68,12 +69,20 @@ Supabase は無料プランのままで足ります。ただし **7日間まっ�
    | --- | --- |
    | ホスト名 | `honne` |
    | TYPE | `CNAME` |
-   | VALUE | 2-1 で控えた値(`cname.vercel-dns.com` など) |
+   | VALUE | `d4e128e559ff7af4.vercel-dns-017.com` |
    | TTL | そのまま(3600) |
 
 5. **追加** を押し、下にスクロールして **確認画面へ進む → 設定する**
 
 > **ホスト名は `honne` だけ**です。`honne.misop-craft.com` と全部入れると `honne.misop-craft.com.misop-craft.com` になってしまいます。
+
+> **末尾のドットは入れません。** Vercel は `...com.` と表示しますが、これは「完全なドメイン名」を示す DNS の記法です。お名前.com の入力欄はドット無しが前提のため、付けるとエラーになることがあります。
+
+### 2-2b. うまくいかないときの確認
+
+DNS を設定しても Vercel が `Invalid Configuration` のままなら、**ドメインのネームサーバーがお名前.com のものになっているか**を確認してください。
+
+お名前.com Navi → **ドメイン → ネームサーバーの設定 → ネームサーバーの変更** で、`01.dnsv.jp` 〜 `04.dnsv.jp` が設定されていれば正常です。別のものになっていると、お名前.com の DNSレコード設定が無視されます。
 
 ### 2-3. 反映を待つ
 
