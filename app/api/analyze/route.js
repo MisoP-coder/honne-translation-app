@@ -4,7 +4,13 @@ import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { z } from 'zod';
 
 import { createClient } from '@/lib/supabase/server';
-import { RECORDS_THRESHOLD, CHANNELS, DAILY_LIMIT, normalizeTraits } from '@/lib/constants';
+import {
+  RECORDS_THRESHOLD,
+  CHANNELS,
+  DAILY_LIMIT,
+  GLOBAL_DAILY_LIMIT,
+  normalizeTraits,
+} from '@/lib/constants';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -151,6 +157,23 @@ export async function POST(request) {
   } else if ((todayCount ?? 0) >= DAILY_LIMIT) {
     return NextResponse.json(
       { error: `1日に作成できる回数の上限(${DAILY_LIMIT}回)に達しました。日付が変わるとまた使えます。` },
+      { status: 429 }
+    );
+  }
+
+  // アプリ全体の上限。1人あたりの上限だけでは「利用者数 × DAILY_LIMIT」に
+  // 上限が無いため、原価が想定を超えて伸びるのを防ぐ。
+  // RLS を越えて全体を数える必要があるので security definer の関数を使う。
+  const { data: globalCount, error: globalError } = await supabase.rpc('analysis_count_today');
+
+  if (globalError) {
+    console.error('全体の利用回数の集計に失敗しました', globalError);
+  } else if ((globalCount ?? 0) >= GLOBAL_DAILY_LIMIT) {
+    return NextResponse.json(
+      {
+        error:
+          '本日はたくさんの方にご利用いただいたため、受付を終了しました。日付が変わるとまた使えます。',
+      },
       { status: 429 }
     );
   }

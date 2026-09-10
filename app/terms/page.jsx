@@ -1,5 +1,5 @@
 import LegalLayout, { legalStyles as s } from '@/components/LegalLayout';
-import { DAILY_LIMIT } from '@/lib/constants';
+import { DAILY_LIMIT, FREE_UNTIL } from '@/lib/constants';
 
 export const metadata = {
   title: '利用規約 | 言いにくいことの翻訳',
@@ -76,7 +76,12 @@ export default function TermsPage() {
 
       <h2 style={s.h2}>7. サービスの変更・終了</h2>
       <p style={s.p}>
-        本サービスは無料で提供しており、機能の変更、一時停止、提供の終了を、事前の予告なく行う場合があります。有料の機能を導入する場合は、事前にお知らせします。
+        本サービスは<strong>{FREE_UNTIL}まで無料で提供します。</strong>
+        それ以降の扱い(無料の継続、有料への移行、提供の終了のいずれか)は、期限までにアプリ内でお知らせします。
+        有料の機能を導入する場合、利用者の同意なく課金することはありません。
+      </p>
+      <p style={s.p}>
+        なお、機能の変更や一時停止は、事前の予告なく行う場合があります。
       </p>
 
       <h2 style={s.h2}>8. 本規約の変更</h2>

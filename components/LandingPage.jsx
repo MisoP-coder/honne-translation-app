@@ -2,7 +2,7 @@ import Link from 'next/link';
 
 import SceneIllustration from '@/components/SceneIllustration';
 import { theme, FONT_HEAD, primaryBtn, card } from '@/lib/theme';
-import { RECORDS_THRESHOLD } from '@/lib/constants';
+import { RECORDS_THRESHOLD, FREE_UNTIL } from '@/lib/constants';
 
 /** 初めて来た人に、何が出てくるかを見せるためのサンプル。実際の生成結果ではない */
 const SAMPLE = {
@@ -95,6 +95,17 @@ export default function LandingPage() {
         }}
       >
         メールアドレスとパスワードだけ。30秒で始められます。
+      </p>
+      <p
+        style={{
+          fontSize: 12,
+          color: theme.accent,
+          fontWeight: 700,
+          textAlign: 'center',
+          margin: '-22px 0 32px',
+        }}
+      >
+        {FREE_UNTIL}まで無料で使えます
       </p>
 
       {/* 生成例。初めての人が一番知りたいのは「何が出てくるか」 */}

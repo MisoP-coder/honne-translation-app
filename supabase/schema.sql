@@ -169,3 +169,25 @@ create policy "outcome_records_update_own" on public.outcome_records
       where p.id = profile_id and p.user_id = auth.uid()
     )
   );
+
+-- ---------------------------------------------------------------------------
+-- 全体の1日あたりの利用回数
+--   analysis_logs は RLS で「自分の行だけ」に絞られるため、普通に数えると
+--   自分のぶんしか数えられない。全体に蓋をするには他人の行も数える必要が
+--   あるので、security definer の関数で「件数だけ」を返す。
+--   サービスロールキーを増やさずに済むぶん、こちらのほうが安全。
+-- ---------------------------------------------------------------------------
+create or replace function public.analysis_count_today()
+returns integer
+language sql
+security definer
+set search_path = public
+as $$
+  select count(*)::int
+  from public.analysis_logs
+  where created_at >= (date_trunc('day', now() at time zone 'Asia/Tokyo') at time zone 'Asia/Tokyo');
+$$;
+
+-- 返すのは件数だけだが、呼べる相手はログイン済みの利用者に限る
+revoke all on function public.analysis_count_today() from public;
+grant execute on function public.analysis_count_today() to authenticated;
