@@ -145,3 +145,27 @@ create policy "analysis_logs_insert_own" on public.analysis_logs
 -- ---------------------------------------------------------------------------
 alter table public.outcome_records
   add column if not exists channel text not null default '';
+
+-- ---------------------------------------------------------------------------
+-- 結果待ちの記録
+--   メールなど、伝えてすぐに反応が分かるとは限らないため、「使った言い方」を
+--   先に保存し、結果は後から埋められるようにする。outcome が null の行が
+--   「結果待ち」を表す。CHECK 制約は null では判定されないので、NOT NULL を
+--   外すだけでよい。
+-- ---------------------------------------------------------------------------
+alter table public.outcome_records
+  alter column outcome drop not null;
+
+-- 結果待ちの行に、あとから結果を書き込むためのポリシー。
+-- 他人のプロフィールへ付け替えられないよう、insert と同じ条件を課す。
+drop policy if exists "outcome_records_update_own" on public.outcome_records;
+create policy "outcome_records_update_own" on public.outcome_records
+  for update
+  using (auth.uid() = user_id)
+  with check (
+    auth.uid() = user_id
+    and exists (
+      select 1 from public.boss_profiles p
+      where p.id = profile_id and p.user_id = auth.uid()
+    )
+  );
