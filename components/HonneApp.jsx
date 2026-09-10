@@ -63,6 +63,7 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
   const [loadingStep, setLoadingStep] = useState(0);
   const [candidates, setCandidates] = useState(null);
   const [expandedIdx, setExpandedIdx] = useState(null);
+  const [expandedPendingId, setExpandedPendingId] = useState(null);
   const [savingOutcome, setSavingOutcome] = useState(false);
   const [recorded, setRecorded] = useState(null);
   const [historyProfileId, setHistoryProfileId] = useState(null);
@@ -467,9 +468,77 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
                           })}
                         </span>
                       </div>
-                      <p style={{ margin: '0 0 10px', fontSize: 12, color: theme.inkMuted, lineHeight: 1.6 }}>
+                      <p style={{ margin: '0 0 8px', fontSize: 12, color: theme.inkMuted, lineHeight: 1.6 }}>
                         {r.situation.length > 50 ? `${r.situation.slice(0, 50)}…` : r.situation}
                       </p>
+
+                      {(() => {
+                        const open = expandedPendingId === r.id;
+                        return (
+                          <>
+                            <button
+                              onClick={() => setExpandedPendingId(open ? null : r.id)}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: theme.accent,
+                                fontSize: 12,
+                                cursor: 'pointer',
+                                padding: 0,
+                                marginBottom: open ? 8 : 10,
+                              }}
+                            >
+                              {open ? '使った言い方を閉じる ▲' : '使った言い方を見る ▼'}
+                            </button>
+
+                            {open && (
+                              <div
+                                style={{
+                                  background: theme.surfaceAlt,
+                                  borderRadius: 8,
+                                  padding: 12,
+                                  marginBottom: 10,
+                                }}
+                              >
+                                {r.candidate_type && (
+                                  <p
+                                    style={{
+                                      margin: '0 0 6px',
+                                      fontSize: 11,
+                                      color: theme.inkMuted,
+                                    }}
+                                  >
+                                    {r.candidate_type}
+                                  </p>
+                                )}
+                                <p
+                                  style={{
+                                    margin: 0,
+                                    fontSize: 13,
+                                    lineHeight: 1.8,
+                                    whiteSpace: 'pre-wrap',
+                                  }}
+                                >
+                                  {r.message}
+                                </p>
+                                <button
+                                  onClick={() => copyText(r.message)}
+                                  style={{
+                                    ...ghostBtn,
+                                    width: '100%',
+                                    marginTop: 10,
+                                    padding: '7px 10px',
+                                    fontSize: 12,
+                                  }}
+                                >
+                                  コピーする
+                                </button>
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
+
                       <div style={{ display: 'flex', gap: 6 }}>
                         {OUTCOMES.map((label) => (
                           <button
