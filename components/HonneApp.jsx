@@ -73,7 +73,14 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
   useEffect(() => () => clearInterval(stepTimerRef.current), []);
 
   const selectedProfile = profiles.find((p) => p.id === selectedProfileId);
-  const recordCount = (profileId) => records.filter((r) => r.profile_id === profileId).length;
+  // 予測に使えるのは結果が入った記録だけ。結果待ち(outcome が null)は数えない
+  const recordCount = (profileId) =>
+    records.filter((r) => r.profile_id === profileId && r.outcome).length;
+
+  const pendingRecords = records
+    .filter((r) => !r.outcome)
+    .slice()
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
   // --- 上司プロフィール -----------------------------------------------------
 
@@ -190,6 +197,7 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
     }
   };
 
+  // outcome に null を渡すと「結果待ち」として保存する
   const recordOutcome = async (candidate, outcome) => {
     // 1回の相談につき記録は1件。保存中の連打も、保存後の押し直しも受け付けない
     if (!selectedProfile || savingOutcome || recorded) return;
@@ -222,6 +230,7 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
       setRecords((prev) => [data, ...prev]);
       setRecorded({ outcome, type: candidate.type ?? '' });
       setView('recorded');
+      return;
     } catch (e) {
       setError(e?.message || '記録の保存に失敗しました。');
     } finally {
@@ -242,6 +251,28 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
       .filter((r) => r.profile_id === profileId)
       .slice()
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+  // 結果待ちの記録に、あとから結果を入れる
+  const fillOutcome = async (recordId, outcome) => {
+    if (savingOutcome) return;
+
+    setSavingOutcome(true);
+    setError(null);
+    try {
+      const { data, error: updateError } = await getSupabase()
+        .from('outcome_records')
+        .update({ outcome })
+        .eq('id', recordId)
+        .select('id, profile_id, situation, message, candidate_type, channel, outcome, created_at')
+        .single();
+      if (updateError) throw updateError;
+      setRecords((prev) => prev.map((r) => (r.id === recordId ? data : r)));
+    } catch (e) {
+      setError(e?.message || '記録の保存に失敗しました。');
+    } finally {
+      setSavingOutcome(false);
+    }
+  };
 
   const deleteRecord = async (recordId) => {
     if (deletingId) return;
@@ -392,6 +423,98 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
             )}
           </div>
 
+          {pendingRecords.length > 0 && (
+            <div
+              style={{
+                ...card,
+                marginBottom: 16,
+                borderColor: theme.accent,
+                background: theme.accentSoft,
+              }}
+            >
+              <p style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 600, color: theme.accent }}>
+                結果待ち({pendingRecords.length}件)
+              </p>
+              <p style={{ margin: '0 0 12px', fontSize: 12, color: theme.inkMuted, lineHeight: 1.7 }}>
+                相手の反応が分かったら記録してください。記録すると、次回の予測の材料になります。
+              </p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {pendingRecords.map((r) => {
+                  const boss = profiles.find((x) => x.id === r.profile_id);
+                  return (
+                    <div
+                      key={r.id}
+                      style={{ background: theme.surface, borderRadius: 10, padding: 12 }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'baseline',
+                          marginBottom: 4,
+                          gap: 8,
+                        }}
+                      >
+                        <span style={{ fontSize: 13, fontWeight: 600 }}>
+                          {boss?.name ?? '(削除された上司)'}
+                        </span>
+                        <span style={{ fontSize: 11, color: theme.inkMuted, flexShrink: 0 }}>
+                          {r.channel ? `${r.channel} / ` : ''}
+                          {new Date(r.created_at).toLocaleDateString('ja-JP', {
+                            month: 'numeric',
+                            day: 'numeric',
+                          })}
+                        </span>
+                      </div>
+                      <p style={{ margin: '0 0 10px', fontSize: 12, color: theme.inkMuted, lineHeight: 1.6 }}>
+                        {r.situation.length > 50 ? `${r.situation.slice(0, 50)}…` : r.situation}
+                      </p>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        {OUTCOMES.map((label) => (
+                          <button
+                            key={label}
+                            onClick={() => fillOutcome(r.id, label)}
+                            disabled={savingOutcome}
+                            style={{
+                              flex: 1,
+                              fontSize: 12,
+                              padding: '7px 4px',
+                              borderRadius: 8,
+                              border: `1px solid ${theme.border}`,
+                              background: '#fff',
+                              color: theme.inkMuted,
+                              opacity: savingOutcome ? 0.5 : 1,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => deleteRecord(r.id)}
+                        disabled={deletingId === r.id}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: theme.inkMuted,
+                          fontSize: 11,
+                          cursor: 'pointer',
+                          padding: 0,
+                          marginTop: 8,
+                          textDecoration: 'underline',
+                        }}
+                      >
+                        {deletingId === r.id ? '削除中…' : '結果を記録せずに消す'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {profiles.length === 0 && (
             <div style={{ ...card, textAlign: 'center', color: theme.inkMuted, marginBottom: 16 }}>
               <p style={{ margin: 0, fontSize: 14 }}>
@@ -536,7 +659,12 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {profileRecords(historyProfileId).map((r) => {
-              const colors = riskColors(r.outcome === 'うまくいった' ? '向上' : r.outcome === '様子見' ? '維持' : '悪化');
+              // 結果待ちは色を付けず、判断待ちであることが分かる見た目にする
+              const colors = r.outcome
+                ? riskColors(
+                    r.outcome === 'うまくいった' ? '向上' : r.outcome === '様子見' ? '維持' : '悪化'
+                  )
+                : { fg: theme.inkMuted, bg: theme.surfaceAlt };
               return (
                 <div key={r.id} style={{ ...card, padding: 14 }}>
                   <div
@@ -556,7 +684,7 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
                         color: colors.fg,
                       }}
                     >
-                      {r.outcome}
+                      {r.outcome ?? '結果待ち'}
                     </span>
                     <span style={{ fontSize: 11, color: theme.inkMuted }}>
                       {new Date(r.created_at).toLocaleString('ja-JP', {
@@ -574,6 +702,31 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
                     {r.candidate_type ? `${r.candidate_type}:` : ''}
                     {r.message.length > 60 ? `${r.message.slice(0, 60)}…` : r.message}
                   </p>
+
+                  {!r.outcome && (
+                    <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+                      {OUTCOMES.map((label) => (
+                        <button
+                          key={label}
+                          onClick={() => fillOutcome(r.id, label)}
+                          disabled={savingOutcome}
+                          style={{
+                            flex: 1,
+                            fontSize: 12,
+                            padding: '7px 4px',
+                            borderRadius: 8,
+                            border: `1px solid ${theme.border}`,
+                            background: '#fff',
+                            color: theme.inkMuted,
+                            opacity: savingOutcome ? 0.5 : 1,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
 
                   <button
                     onClick={() => deleteRecord(r.id)}
@@ -927,6 +1080,24 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
                     <p style={{ margin: '0 0 8px', fontSize: 12, color: theme.inkMuted }}>
                       この言い方を使ったら、結果を記録しておくと次回の精度が上がります。
                     </p>
+                    <button
+                      onClick={() => recordOutcome(c, null)}
+                      disabled={savingOutcome}
+                      style={{
+                        width: '100%',
+                        fontSize: 12,
+                        padding: '7px 4px',
+                        borderRadius: 8,
+                        border: `1px dashed ${theme.border}`,
+                        background: '#fff',
+                        color: theme.accent,
+                        opacity: savingOutcome ? 0.5 : 1,
+                        cursor: 'pointer',
+                        marginBottom: 6,
+                      }}
+                    >
+                      この言い方を使った(結果はあとで記録する)
+                    </button>
                     <div style={{ display: 'flex', gap: 6 }}>
                       {OUTCOMES.map((label) => (
                         <button
@@ -994,14 +1165,27 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
             >
               ✓
             </span>
-            <h1 style={{ ...h1, fontSize: 19, margin: '0 0 8px' }}>記録しました</h1>
-            <p style={{ margin: '0 0 4px', fontSize: 14 }}>
-              {selectedProfile.name}への「{recorded.type}」を
-              <br />
-              「{recorded.outcome}」として記録しました。
-            </p>
+            <h1 style={{ ...h1, fontSize: 19, margin: '0 0 8px' }}>
+              {recorded.outcome ? '記録しました' : '保存しました'}
+            </h1>
+            {recorded.outcome ? (
+              <p style={{ margin: '0 0 4px', fontSize: 14 }}>
+                {selectedProfile.name}への「{recorded.type}」を
+                <br />
+                「{recorded.outcome}」として記録しました。
+              </p>
+            ) : (
+              <p style={{ margin: '0 0 4px', fontSize: 14, lineHeight: 1.7 }}>
+                {selectedProfile.name}への「{recorded.type}」を
+                <br />
+                使ったものとして保存しました。
+              </p>
+            )}
             <p style={{ margin: '12px 0 0', fontSize: 12, color: theme.inkMuted, lineHeight: 1.7 }}>
               {(() => {
+                if (!recorded.outcome) {
+                  return '相手の反応が分かったら、ホームの「結果待ち」から記録してください。記録するまでは予測の材料には使いません。';
+                }
                 const count = recordCount(selectedProfile.id);
                 return count >= RECORDS_THRESHOLD
                   ? `実績は${count}件になりました。次回からもこの実績をもとに予測します。`

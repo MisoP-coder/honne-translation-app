@@ -170,6 +170,8 @@ export async function POST(request) {
     .from('outcome_records')
     .select('situation, message, outcome, channel, created_at')
     .eq('profile_id', profileId)
+    // 結果待ち(outcome が null)は判断材料にならないので除く
+    .not('outcome', 'is', null)
     .order('created_at', { ascending: false })
     .limit(RECORDS_IN_PROMPT);
 
