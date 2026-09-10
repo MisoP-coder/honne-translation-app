@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 import SceneIllustration from '@/components/SceneIllustration';
 import { theme, FONT_HEAD, primaryBtn, card } from '@/lib/theme';
+import { RECORDS_THRESHOLD } from '@/lib/constants';
 
 /** 初めて来た人に、何が出てくるかを見せるためのサンプル。実際の生成結果ではない */
 const SAMPLE = {
@@ -31,7 +32,7 @@ const REASONS = [
   },
   {
     title: '使うほど、その上司に近づきます',
-    body: '「うまくいった / 様子見 / こじれた」を記録すると、3件たまった時点で一般論ではなく、あなたとその上司の実績をもとに予測するようになります。',
+    body: `「うまくいった / 様子見 / こじれた」を記録すると、${RECORDS_THRESHOLD}件たまった時点で一般論ではなく、あなたとその上司の実績をもとに予測するようになります。`,
   },
 ];
 
@@ -150,7 +151,7 @@ export default function LandingPage() {
         </div>
       </div>
       <p style={{ fontSize: 11, color: theme.inkMuted, margin: '0 0 32px', lineHeight: 1.7 }}>
-        実際にはトーンの違う3案が並び、それぞれに「なぜそう予測したか」が付きます。
+        実際にはトーンの違う3案が並び、それぞれに「なぜそう予測したか」が付きます。出てくるのは案なので、送る前にご自身で読み直してお使いください。
       </p>
 
       {/* 使い方 */}
@@ -206,6 +207,9 @@ export default function LandingPage() {
           <li>上司本人に通知が届くことはありません</li>
           <li>記録した実績は、いつでも自分で削除できます</li>
         </ul>
+        <p style={{ margin: '10px 0 0', fontSize: 11, color: theme.inkMuted, lineHeight: 1.8 }}>
+          なお、提示されるのは案であり、実際の相手の反応を保証するものではありません。利用によって生じた職場での結果について、運営者は責任を負いかねます。
+        </p>
       </div>
 
       <Link href="/login" style={cta}>

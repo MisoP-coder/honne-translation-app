@@ -39,7 +39,7 @@ const GUIDE_STEPS = [
   },
   {
     title: '使った結果を記録する',
-    body: 'うまくいった / 様子見 / こじれた の3択です。同じ上司で3件たまると、一般論ではなくその人に効いた言い方をもとに予測するようになります。',
+    body: `うまくいった / 様子見 / こじれた の3択です。同じ上司で${RECORDS_THRESHOLD}件たまると、一般論ではなくその人に効いた言い方をもとに予測するようになります。`,
   },
 ];
 
@@ -816,7 +816,10 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
             ← 状況を入力し直す
           </button>
           <h1 style={h1}>言い方の候補</h1>
-          <p style={sub}>タップすると、リスク予測の根拠が開きます。</p>
+          <p style={{ ...sub, marginBottom: 6 }}>タップすると、リスク予測の根拠が開きます。</p>
+          <p style={{ fontSize: 12, color: theme.inkMuted, margin: '0 0 14px', lineHeight: 1.7 }}>
+            ここに出ているのは案です。<strong>送る前にご自身で読み直してください。</strong>
+          </p>
 
           {error && <p style={{ color: theme.danger, fontSize: 13, margin: '0 0 12px' }}>{error}</p>}
 
@@ -950,6 +953,24 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
                 </div>
               );
             })}
+          </div>
+
+          <div
+            style={{
+              marginTop: 16,
+              padding: 14,
+              borderRadius: 10,
+              background: theme.surfaceAlt,
+              fontSize: 12,
+              color: theme.inkMuted,
+              lineHeight: 1.9,
+            }}
+          >
+            リスク予測は目安であり、相手が実際にどう受け取るかを保証するものではありません。使うかどうかの判断はご自身でお願いします。本サービスの利用によって生じた職場での結果について、運営者は責任を負いかねます(
+            <a href="/terms" style={{ color: theme.accent }}>
+              利用規約
+            </a>
+            )。
           </div>
         </>
       )}
