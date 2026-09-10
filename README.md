@@ -77,12 +77,14 @@ Project URL が見つからないときは、ダッシュボードのアドレ�
 
 | 項目 | 値 |
 | --- | --- |
-| Site URL | `https://xxxxx.vercel.app` |
-| Redirect URLs | `https://xxxxx.vercel.app/**` |
+| Site URL | `https://honne.misop-craft.com` |
+| Redirect URLs | `https://honne.misop-craft.com/**` |
+
+> 独自ドメインを使わない場合は、Vercel が割り当てた `https://xxxxx.vercel.app` を入れてください。
 
 さらに **Authentication → Sign In / Providers → Email** の **Confirm email をオフ**にしておくと、登録がその場で完了して確認が楽になります(本番運用時は戻してください)。
 
-> パスワード再設定のリンクもこの **Redirect URLs** を通ります。`https://xxxxx.vercel.app/**` のように末尾を `/**` にしておけば `/auth/callback` も含まれるので、追加の設定は要りません。
+> パスワード再設定のリンクもこの **Redirect URLs** を通ります。末尾を `/**` にしておけば `/auth/callback` も含まれるので、追加の設定は要りません。
 
 Supabase が送るメールは初期状態だと**英語**で、どのアプリからのメールか分かりません。日本語の文面を [`docs/email-templates.md`](docs/email-templates.md) に用意してあります。ただし**無料プランで標準のメール送信を使っているあいだは編集できない**ので、先に外部 SMTP の登録が必要です。詳しくは同ファイルを参照してください。
 

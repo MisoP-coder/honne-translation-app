@@ -41,38 +41,74 @@ Supabase は無料プランのままで足ります。ただし **7日間まっ�
 
 ---
 
-## 2. 独自ドメインを取る
+## 2. ドメインをつなぐ
 
-先に取ってください。**告知したあとに URL を変えると、共有されたリンクが無駄になります。**
+取得済み: **`misop-craft.com`**(お名前.com)
+アプリの URL: **`https://honne.misop-craft.com`**
 
-### 2-1. 取得
+`misop-craft.com` 自体は Miso-P さんの屋号として空けておき、アプリはその下のサブドメインに置きます。今後別のものを作っても並べられます。
 
-スマホから完結します。お名前.com、Cloudflare Registrar、Google Domains 後継の Squarespace Domains などで、`.com` や `.app` が年1,000〜2,000円程度です。
-
-ドメイン名は短く、読んで意味が分かるものが向いています(例:`iinikui.com`、`honne-app.com`)。
-
-### 2-2. Vercel に登録
+### 2-1. Vercel にサブドメインを追加する
 
 1. Vercel のプロジェクトを開き、URL の末尾に **`/settings/domains`** を足して直接開く
-2. 取得したドメインを入力して **Add**
-3. 表示された DNS レコード(A レコードまたは CNAME)を、ドメインを買った業者の管理画面に登録する
-4. 反映まで数分〜数時間。Vercel の画面が **Valid Configuration** になれば完了
+2. 入力欄に **`honne.misop-craft.com`** と入れて **Add**
+3. 「Invalid Configuration」と赤く出ますが、正常です。DNS の設定がまだなので、次の手順で解決します
+4. 画面に表示される **CNAME の値**(`cname.vercel-dns.com` のような文字列)を控える
 
-### 2-3. 3か所を書き換える
+### 2-2. お名前.com で CNAME を登録する
 
-ドメインが有効になったら、忘れずに:
+お名前.com は画面が入り組んでいるので、順番どおりに。
 
-- **`lib/constants.js` の `SITE_URL`** — シェアボタンが指す URL
-- **Supabase の Authentication → URL Configuration** — `Site URL` と `Redirect URLs`(`https://新しいドメイン/**`)。ここを直さないとログインとパスワード再設定が壊れます
-- **メール文面の日本語化** — ドメインを認証すれば `docs/email-templates.md` が使えるようになります(Resend なら無料枠3,000通/月)
+1. お名前.com Navi にログイン
+2. **ドメイン → DNS設定/転送設定 → DNSレコード設定を利用する**
+3. `misop-craft.com` を選んで **次へ**
+4. 「入力」の欄に、次のように入れる
 
----
+   | 項目 | 入れる値 |
+   | --- | --- |
+   | ホスト名 | `honne` |
+   | TYPE | `CNAME` |
+   | VALUE | 2-1 で控えた値(`cname.vercel-dns.com` など) |
+   | TTL | そのまま(3600) |
+
+5. **追加** を押し、下にスクロールして **確認画面へ進む → 設定する**
+
+> **ホスト名は `honne` だけ**です。`honne.misop-craft.com` と全部入れると `honne.misop-craft.com.misop-craft.com` になってしまいます。
+
+### 2-3. 反映を待つ
+
+お名前.com の DNS は反映に **数十分〜数時間** かかります(最大24時間)。
+Vercel の Domains 画面が **Valid Configuration** に変わり、`https://honne.misop-craft.com` を開いて紹介ページが出れば完了です。
+
+### 2-4. Supabase の URL を直す(いちばん大事)
+
+**ここを忘れると、新しい URL でログインとパスワード再設定が動きません。**
+
+Supabase の **Authentication → URL Configuration**(プロジェクト URL の末尾に `/auth/url-configuration`):
+
+| 項目 | 値 |
+| --- | --- |
+| Site URL | `https://honne.misop-craft.com` |
+| Redirect URLs | `https://honne.misop-craft.com/**` |
+
+> 移行中は `vercel.app` のほうも残しておくと安全です。Redirect URLs は複数登録できます。
+
+### 2-5. メール文面を日本語にする(任意)
+
+ドメインがあれば、`docs/email-templates.md` の文面が使えるようになります。
+
+1. [Resend](https://resend.com) に登録(無料枠 3,000通/月)
+2. `misop-craft.com` を追加し、表示された DNS レコード(SPF・DKIM)をお名前.com に登録
+3. Supabase の **Authentication → Emails → SMTP Settings** に Resend の情報を入れる
+4. テンプレートのロックが外れるので、`docs/email-templates.md` の文面を貼る
+
+告知には間に合わなくても構いません。**アプリ側で「英語のメールが届きます」と案内している**ので、後回しにしても利用者が詰まることはありません。
 
 ## 3. 公開前の最終確認
 
 スマホの Chrome で、上から順に。**シークレットタブ**で試すと、初めて来た人と同じ状態を確認できます。
 
-- [ ] `/` を開くと紹介ページが出て、「◯月◯日まで無料で使えます」が表示される
+- [ ] `https://honne.misop-craft.com` を開くと紹介ページが出て、「2026年9月30日まで無料で使えます」が表示される
 - [ ] 「無料ではじめる」→ 新規登録できる
 - [ ] 上司を登録できる
 - [ ] 候補が3案出る。冒頭に「送る前にご自身で読み直してください」が出ている
@@ -107,7 +143,7 @@ Supabase は無料プランのままで足ります。ただし **7日間まっ�
 「信頼にどう響くか」の予測つきです。
 
 9月30日まで無料です。
-https://(ドメイン)
+https://honne.misop-craft.com
 ```
 
 ### note の見出し(案)
@@ -121,7 +157,7 @@ https://(ドメイン)
 言いにくいことを上司にどう伝えるか、というアプリを作ってみました。
 よかったら試してもらえませんか。30秒で始められます。
 
-https://(ドメイン)
+https://honne.misop-craft.com
 
 使ってみて「分かりにくかったところ」を教えてもらえると助かります。
 ```
