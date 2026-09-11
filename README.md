@@ -168,7 +168,8 @@ proxy.js                  セッション更新と未ログイン時のリダイ
 supabase/schema.sql       テーブル・RLS ポリシー定義
 docs/email-templates.md   Supabase に貼り付けるメール文面(日本語)
 docs/launch.md            無料公開の手順(費用の蓋・ドメイン・告知・計測)
-docs/note-article.md      note 記事の下書き(告知用)
+docs/note-article.md      note 記事の下書き(告知用・無料)
+docs/note-paid-article.md note 記事の下書き(スマホ開発記・有料)
 vercel.json               Vercel に Next.js プロジェクトだと伝える
 ```
 
