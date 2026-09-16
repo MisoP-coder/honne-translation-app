@@ -16,11 +16,11 @@ export default async function Home() {
   const [{ data: profiles }, { data: records }] = await Promise.all([
     supabase
       .from('boss_profiles')
-      .select('id, name, traits, note, created_at')
+      .select('id, name, traits, note, target_type, created_at')
       .order('created_at', { ascending: true }),
     supabase
       .from('outcome_records')
-      .select('id, profile_id, situation, message, candidate_type, channel, outcome, created_at')
+      .select('id, profile_id, situation, message, candidate_type, channel, scene_type, outcome, created_at')
       .order('created_at', { ascending: false })
       .limit(200),
   ]);

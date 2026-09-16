@@ -5,19 +5,27 @@ import { useState, useRef, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import HeaderIllustration from '@/components/HeaderIllustration';
 import {
-  TRAIT_QUESTIONS,
   OUTCOMES,
-  LOADING_MESSAGES,
   RECORDS_THRESHOLD,
-  CHANNELS,
-  defaultChannel,
-  channelGroup,
+  TARGET_TYPES,
+  DEFAULT_TARGET_TYPE,
+  SCENE_TYPES,
+  NOTE_FIELD,
   SHARE_TARGETS,
   SHARE_TEXT,
   SITE_URL,
   FREE_UNTIL,
+  channelsFor,
+  channelMismatchNote,
+  defaultChannel,
   emptyTraits,
+  loadingMessages,
   normalizeTraits,
+  questionsFor,
+  riskLabels,
+  targetLabel,
+  targetType,
+  traitsSummary,
 } from '@/lib/constants';
 import {
   theme,
@@ -31,7 +39,7 @@ import {
 
 const GUIDE_STEPS = [
   {
-    title: '上司を登録する',
+    title: '相手を登録する',
     body: '呼び名と、5つの質問に答えるだけです。あとから何度でも編集できます。',
   },
   {
@@ -40,7 +48,7 @@ const GUIDE_STEPS = [
   },
   {
     title: '使った結果を記録する',
-    body: `うまくいった / 様子見 / こじれた の3択です。同じ上司で${RECORDS_THRESHOLD}件たまると、一般論ではなくその人に効いた言い方をもとに予測するようになります。`,
+    body: `うまくいった / 様子見 / こじれた の3択です。同じ相手で${RECORDS_THRESHOLD}件たまると、一般論ではなくその人に効いた言い方をもとに予測するようになります。`,
   },
 ];
 
@@ -60,7 +68,9 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
   const [savingProfile, setSavingProfile] = useState(false);
   const [selectedProfileId, setSelectedProfileId] = useState(null);
   const [situation, setSituation] = useState('');
-  const [channel, setChannel] = useState(CHANNELS[0]);
+  const [channel, setChannel] = useState('');
+  const [sceneType, setSceneType] = useState(SCENE_TYPES[0]);
+  const [loadingLabels, setLoadingLabels] = useState(() => loadingMessages('boss'));
   const [loadingStep, setLoadingStep] = useState(0);
   const [candidates, setCandidates] = useState(null);
   const [expandedIdx, setExpandedIdx] = useState(null);
@@ -84,11 +94,17 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
     .slice()
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
-  // --- 上司プロフィール -----------------------------------------------------
+  // --- 相手プロフィール -----------------------------------------------------
 
   const startNewProfile = () => {
     setError(null);
-    setEditingProfile({ id: null, name: '', traits: emptyTraits(), note: '' });
+    setEditingProfile({
+      id: null,
+      target_type: DEFAULT_TARGET_TYPE,
+      name: '',
+      traits: emptyTraits(DEFAULT_TARGET_TYPE),
+      note: '',
+    });
     setView('profileForm');
   };
 
@@ -97,7 +113,8 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
     setEditingProfile({
       id: profile.id,
       name: profile.name,
-      traits: normalizeTraits(profile.traits),
+      target_type: targetType(profile),
+      traits: normalizeTraits(profile.traits, targetType(profile)),
       note: profile.note ?? '',
     });
     setView('profileForm');
@@ -111,6 +128,7 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
 
     const supabase = getSupabase();
     const payload = {
+      target_type: editingProfile.target_type ?? DEFAULT_TARGET_TYPE,
       name: editingProfile.name.trim(),
       traits: editingProfile.traits,
       note: editingProfile.note.trim(),
@@ -122,7 +140,7 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
           .from('boss_profiles')
           .update(payload)
           .eq('id', editingProfile.id)
-          .select('id, name, traits, note, created_at')
+          .select('id, name, traits, note, target_type, created_at')
           .single();
         if (updateError) throw updateError;
         setProfiles((prev) => prev.map((p) => (p.id === data.id ? data : p)));
@@ -135,7 +153,7 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
         const { data, error: insertError } = await supabase
           .from('boss_profiles')
           .insert({ ...payload, user_id: user.id })
-          .select('id, name, traits, note, created_at')
+          .select('id, name, traits, note, target_type, created_at')
           .single();
         if (insertError) throw insertError;
         setProfiles((prev) => [...prev, data]);
@@ -154,7 +172,8 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
   const startInput = (profileId) => {
     const profile = profiles.find((p) => p.id === profileId);
     setSelectedProfileId(profileId);
-    setChannel(defaultChannel(profile?.traits));
+    setChannel(defaultChannel(profile));
+    setSceneType(SCENE_TYPES[0]);
     setSituation('');
     setCandidates(null);
     setRecorded(null);
@@ -165,13 +184,16 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
   const runAnalysis = async () => {
     if (!selectedProfile || !situation.trim()) return;
 
+    const loadingSteps = loadingMessages(targetType(selectedProfile));
+    setLoadingLabels(loadingSteps);
+
     setView('loading');
     setLoadingStep(0);
     setError(null);
 
     clearInterval(stepTimerRef.current);
     stepTimerRef.current = setInterval(() => {
-      setLoadingStep((s) => (s < LOADING_MESSAGES.length - 1 ? s + 1 : s));
+      setLoadingStep((s) => (s < loadingSteps.length - 1 ? s + 1 : s));
     }, 650);
 
     try {
@@ -182,6 +204,7 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
           profileId: selectedProfile.id,
           situation: situation.trim(),
           channel,
+          sceneType: targetType(selectedProfile) === 'teacher' ? sceneType : '',
         }),
       });
       const data = await response.json();
@@ -223,9 +246,10 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
           message: candidate.message,
           candidate_type: candidate.type ?? '',
           channel,
+          scene_type: targetType(selectedProfile) === 'teacher' ? sceneType : '',
           outcome,
         })
-        .select('id, profile_id, situation, message, candidate_type, channel, outcome, created_at')
+        .select('id, profile_id, situation, message, candidate_type, channel, scene_type, outcome, created_at')
         .single();
       if (insertError) throw insertError;
 
@@ -265,7 +289,7 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
         .from('outcome_records')
         .update({ outcome })
         .eq('id', recordId)
-        .select('id, profile_id, situation, message, candidate_type, channel, outcome, created_at')
+        .select('id, profile_id, situation, message, candidate_type, channel, scene_type, outcome, created_at')
         .single();
       if (updateError) throw updateError;
       setRecords((prev) => prev.map((r) => (r.id === recordId ? data : r)));
@@ -346,7 +370,7 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
           <header style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <h1 style={h1}>言いにくいことの翻訳</h1>
-              <p style={{ ...sub, margin: 0 }}>上司を選んで、今の状況を相談してみましょう。</p>
+              <p style={{ ...sub, margin: 0 }}>相手を選んで、今の状況を相談してみましょう。</p>
             </div>
             <HeaderIllustration />
           </header>
@@ -424,7 +448,7 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
                     lineHeight: 1.7,
                   }}
                 >
-                  入力した内容は、あなたのアカウントからのみ見られます。上司本人に通知が行くことはありません。
+                  入力した内容は、あなたのアカウントからのみ見られます。相手本人に通知が行くことはありません。
                 </p>
               </div>
             )}
@@ -464,7 +488,7 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
                         }}
                       >
                         <span style={{ fontSize: 13, fontWeight: 600 }}>
-                          {boss?.name ?? '(削除された上司)'}
+                          {boss?.name ?? '(削除された相手)'}
                         </span>
                         <span style={{ fontSize: 11, color: theme.inkMuted, flexShrink: 0 }}>
                           {r.channel ? `${r.channel} / ` : ''}
@@ -593,14 +617,14 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
           {profiles.length === 0 && (
             <div style={{ ...card, textAlign: 'center', color: theme.inkMuted, marginBottom: 16 }}>
               <p style={{ margin: 0, fontSize: 14 }}>
-                まだ上司が登録されていません。まずは1人登録してみましょう。
+                まだ誰も登録されていません。まずは1人登録してみましょう。
               </p>
             </div>
           )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
             {profiles.map((p) => {
-              const traits = normalizeTraits(p.traits);
+              const summary = traitsSummary(p);
               const count = recordCount(p.id);
               return (
                 <div key={p.id} style={card}>
@@ -628,13 +652,13 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
                     </button>
                   </div>
                   <p style={{ margin: '0 0 6px', fontSize: 12, color: theme.inkMuted }}>
-                    {traits.reaction} ・ {traits.order} ・ {traits.channel}
+                    {summary}
                   </p>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 0 12px' }}>
                     <p style={{ margin: 0, fontSize: 11, color: theme.inkMuted }}>
                       {count >= RECORDS_THRESHOLD
                         ? `実績${count}件をもとに予測します`
-                        : `実績${count}件(あと${RECORDS_THRESHOLD - count}件でこの上司専用の予測になります)`}
+                        : `実績${count}件(あと${RECORDS_THRESHOLD - count}件でこの相手専用の予測になります)`}
                     </p>
                     {count > 0 && (
                       <button
@@ -655,7 +679,7 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
                     )}
                   </div>
                   <button style={{ ...primaryBtn, width: '100%' }} onClick={() => startInput(p.id)}>
-                    この上司に相談する
+                    この{targetLabel(targetType(p))}に相談する
                   </button>
                 </div>
               );
@@ -663,13 +687,13 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
           </div>
 
           <button style={{ ...ghostBtn, width: '100%' }} onClick={startNewProfile}>
-            + 新しい上司を登録する
+            + 新しい相手を登録する
           </button>
 
           <div style={{ ...card, marginTop: 24 }}>
             <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 600 }}>このアプリをシェアする</p>
             <p style={{ margin: '0 0 12px', fontSize: 11, color: theme.inkMuted, lineHeight: 1.7 }}>
-              紹介文が自動で入ります。あなたの上司の情報や相談内容は含まれません。
+              紹介文が自動で入ります。あなたが登録した相手の情報や相談内容は含まれません。
             </p>
             <div style={{ display: 'flex', gap: 8 }}>
               {SHARE_TARGETS.map((target) => (
@@ -723,7 +747,7 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
               setView('home');
             }}
           >
-            ← 上司一覧に戻る
+            ← 一覧に戻る
           </button>
           <h1 style={h1}>{profiles.find((p) => p.id === historyProfileId)?.name}の実績</h1>
           <p style={sub}>
@@ -834,10 +858,50 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
 
       {view === 'profileForm' && editingProfile && (
         <>
-          <h1 style={h1}>{editingProfile.id ? '上司プロフィール編集' : '上司プロフィール登録'}</h1>
+          <h1 style={h1}>
+            {editingProfile.id
+              ? `${targetLabel(editingProfile.target_type)}の編集`
+              : `${targetLabel(editingProfile.target_type)}を登録`}
+          </h1>
           <p style={sub}>簡単な設問に答えるだけで登録できます。</p>
 
           <div style={{ ...card, display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* 種別を変えると質問も実績の意味も変わるため、登録時だけ選べるようにする */}
+            {!editingProfile.id && (
+              <div>
+                <p style={{ fontSize: 13, color: theme.inkMuted, margin: '0 0 8px' }}>誰に伝える?</p>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  {TARGET_TYPES.map((t) => {
+                    const active = editingProfile.target_type === t.key;
+                    return (
+                      <button
+                        key={t.key}
+                        className="ht-toggle"
+                        onClick={() =>
+                          setEditingProfile({
+                            ...editingProfile,
+                            target_type: t.key,
+                            traits: emptyTraits(t.key),
+                          })
+                        }
+                        style={{
+                          padding: '10px 8px',
+                          borderRadius: 8,
+                          border: `1px solid ${active ? theme.accent : theme.border}`,
+                          background: active ? theme.accentSoft : '#fff',
+                          color: active ? theme.accent : theme.ink,
+                          fontSize: 13,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {t.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             <div>
               <label
                 htmlFor="boss-name"
@@ -849,15 +913,31 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
                 id="boss-name"
                 value={editingProfile.name}
                 onChange={(e) => setEditingProfile({ ...editingProfile, name: e.target.value })}
-                placeholder="例:田中部長"
+                placeholder={
+                  TARGET_TYPES.find((t) => t.key === editingProfile.target_type)?.namePlaceholder
+                }
                 maxLength={60}
                 style={inputStyle}
               />
             </div>
 
-            {TRAIT_QUESTIONS.map((q) => (
+            {questionsFor(editingProfile.target_type).map((q) => (
               <div key={q.key}>
                 <p style={{ fontSize: 13, color: theme.inkMuted, margin: '0 0 8px' }}>{q.label}</p>
+                {q.type === 'text' ? (
+                  <input
+                    value={editingProfile.traits[q.key] ?? ''}
+                    onChange={(e) =>
+                      setEditingProfile({
+                        ...editingProfile,
+                        traits: { ...editingProfile.traits, [q.key]: e.target.value },
+                      })
+                    }
+                    placeholder={q.placeholder}
+                    maxLength={30}
+                    style={inputStyle}
+                  />
+                ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   {q.options.map((opt) => {
                     const active = editingProfile.traits[q.key] === opt;
@@ -886,18 +966,19 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
                     );
                   })}
                 </div>
+                )}
               </div>
             ))}
 
             <div>
               <p style={{ fontSize: 13, color: theme.inkMuted, margin: '0 0 8px' }}>
-                地雷ワード・NGな言い方(任意)
+                {NOTE_FIELD[editingProfile.target_type ?? 'boss'].label}
               </p>
               <textarea
                 rows={3}
                 value={editingProfile.note}
                 onChange={(e) => setEditingProfile({ ...editingProfile, note: e.target.value })}
-                placeholder="例:「できません」という言い方をすると特に不機嫌になる"
+                placeholder={NOTE_FIELD[editingProfile.target_type ?? 'boss'].placeholder}
                 style={{ ...inputStyle, fontSize: 13, resize: 'none' }}
               />
             </div>
@@ -934,7 +1015,7 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
       {view === 'input' && selectedProfile && (
         <>
           <button style={backBtn} onClick={() => setView('home')}>
-            ← 上司一覧に戻る
+            ← 一覧に戻る
           </button>
           <h1 style={h1}>{selectedProfile.name}への相談</h1>
           <p style={sub}>今の状況を、思いつくままで大丈夫です。</p>
@@ -942,7 +1023,7 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
           <div style={card}>
             <p style={{ fontSize: 13, color: theme.inkMuted, margin: '0 0 8px' }}>今回の伝え方</p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginBottom: 16 }}>
-              {CHANNELS.map((c) => {
+              {channelsFor(targetType(selectedProfile)).map((c) => {
                 const active = channel === c;
                 return (
                   <button
@@ -965,11 +1046,47 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
                 );
               })}
             </div>
-            {channelGroup(channel) !== normalizeTraits(selectedProfile.traits).channel && (
+            {channelMismatchNote(selectedProfile, channel) && (
               <p style={{ fontSize: 11, color: theme.caution, margin: '-8px 0 14px', lineHeight: 1.6 }}>
-                {selectedProfile.name}が好むのは
-                {normalizeTraits(selectedProfile.traits).channel}です。その点も踏まえて予測します。
+                {selectedProfile.name}の普段の手段は
+                {channelMismatchNote(selectedProfile, channel)}です。その点も踏まえて予測します。
               </p>
+            )}
+
+            {targetType(selectedProfile) === 'teacher' && (
+              <>
+                <p style={{ fontSize: 13, color: theme.inkMuted, margin: '0 0 8px' }}>どんな場面?</p>
+                <div
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 6,
+                    marginBottom: 16,
+                  }}
+                >
+                  {SCENE_TYPES.map((sc) => {
+                    const active = sceneType === sc;
+                    return (
+                      <button
+                        key={sc}
+                        className="ht-toggle"
+                        onClick={() => setSceneType(sc)}
+                        style={{
+                          padding: '8px 10px',
+                          borderRadius: 8,
+                          border: `1px solid ${active ? theme.accent : theme.border}`,
+                          background: active ? theme.accentSoft : '#fff',
+                          color: active ? theme.accent : theme.ink,
+                          fontSize: 12,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {sc}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
             )}
 
             <p style={{ fontSize: 13, color: theme.inkMuted, margin: '0 0 8px' }}>今の状況</p>
@@ -977,7 +1094,11 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
               rows={5}
               value={situation}
               onChange={(e) => setSituation(e.target.value)}
-              placeholder="例:納期に3日遅れそうと今日中に伝える必要がある"
+              placeholder={
+                targetType(selectedProfile) === 'teacher'
+                  ? '例:持ち物の連絡が配布物と食い違っていて子どもが困っている'
+                  : '例:納期に3日遅れそうと今日中に伝える必要がある'
+              }
               maxLength={2000}
               style={{ ...inputStyle, resize: 'none' }}
             />
@@ -1020,7 +1141,7 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
             ))}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start' }}>
-            {LOADING_MESSAGES.map((msg, i) => (
+                    {loadingLabels.map((msg, i) => (
               <p
                 key={msg}
                 style={{
@@ -1038,7 +1159,7 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
         </div>
       )}
 
-      {view === 'results' && candidates && (
+      {view === 'results' && candidates && selectedProfile && (
         <>
           <button style={backBtn} onClick={() => setView('input')}>
             ← 状況を入力し直す
@@ -1095,7 +1216,7 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
                         color: trust.fg,
                       }}
                     >
-                      信頼:{c.risk?.trust?.level}
+                      {riskLabels(targetType(selectedProfile)).trust}:{c.risk?.trust?.level}
                     </span>
                     <span
                       style={{
@@ -1106,7 +1227,7 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
                         color: tone.fg,
                       }}
                     >
-                      温度感:{c.risk?.tone?.level}
+                      {riskLabels(targetType(selectedProfile)).tone}:{c.risk?.tone?.level}
                     </span>
                   </div>
 
@@ -1136,8 +1257,12 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
                         lineHeight: 1.7,
                       }}
                     >
-                      <p style={{ margin: '0 0 6px' }}>信頼: {c.risk?.trust?.reason}</p>
-                      <p style={{ margin: '0 0 6px' }}>温度感: {c.risk?.tone?.reason}</p>
+                      <p style={{ margin: '0 0 6px' }}>
+                        {riskLabels(targetType(selectedProfile)).trust}: {c.risk?.trust?.reason}
+                      </p>
+                      <p style={{ margin: '0 0 6px' }}>
+                        {riskLabels(targetType(selectedProfile)).tone}: {c.risk?.tone?.reason}
+                      </p>
                       <p style={{ margin: 0 }}>今後の対応: {c.risk?.follow_up}</p>
                     </div>
                   )}
@@ -1212,7 +1337,7 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
               lineHeight: 1.9,
             }}
           >
-            リスク予測は目安であり、相手が実際にどう受け取るかを保証するものではありません。使うかどうかの判断はご自身でお願いします。本サービスの利用によって生じた職場での結果について、運営者は責任を負いかねます(
+            リスク予測は目安であり、相手が実際にどう受け取るかを保証するものではありません。使うかどうかの判断はご自身でお願いします。本サービスの利用によって生じた結果について、運営者は責任を負いかねます(
             <a href="/terms" style={{ color: theme.accent }}>
               利用規約
             </a>
@@ -1264,14 +1389,14 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
                 const count = recordCount(selectedProfile.id);
                 return count >= RECORDS_THRESHOLD
                   ? `実績は${count}件になりました。次回からもこの実績をもとに予測します。`
-                  : `実績は${count}件になりました。あと${RECORDS_THRESHOLD - count}件で、この上司専用の予測に切り替わります。`;
+                  : `実績は${count}件になりました。あと${RECORDS_THRESHOLD - count}件で、この相手専用の予測に切り替わります。`;
               })()}
             </p>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
             <button style={{ ...primaryBtn, width: '100%' }} onClick={() => startInput(selectedProfile.id)}>
-              同じ上司にもう一度相談する
+              同じ相手にもう一度相談する
             </button>
             <button
               style={{ ...ghostBtn, width: '100%' }}
@@ -1280,7 +1405,7 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
                 setView('home');
               }}
             >
-              上司一覧に戻る
+              一覧に戻る
             </button>
           </div>
         </div>
