@@ -1,8 +1,24 @@
 import Link from 'next/link';
 
-import SceneIllustration from '@/components/SceneIllustration';
 import { theme, FONT_HEAD, primaryBtn, card } from '@/lib/theme';
 import { RECORDS_THRESHOLD, FREE_UNTIL } from '@/lib/constants';
+
+/**
+ * ヒーローに並べる2枚の場面イラスト。
+ * 「上司の話だけのアプリ」と思われないよう、先生の場面も同じ大きさで見せる。
+ */
+const SCENES = [
+  {
+    src: '/scene-boss.jpg',
+    caption: '職場の上司に',
+    alt: '資料を持って立ち、机に座る上司に言いにくい報告をしている会社員のイラスト',
+  },
+  {
+    src: '/scene-teacher.jpg',
+    caption: '園・学校の先生に',
+    alt: '教室の前で担任の先生に話しかけようとしている保護者のイラスト',
+  },
+];
 
 /**
  * 初めて来た人に、何が出てくるかを見せるためのサンプル。実際の生成結果ではない。
@@ -103,15 +119,48 @@ export default function LandingPage() {
           「これ、どう伝えよう…」を、3つの言い方に。
         </p>
         <p style={{ fontSize: 13, color: theme.inkMuted, margin: '0 0 16px', lineHeight: 1.8 }}>
-          職場の上司へ。園・学校の先生へ。
-          <br />
           言いにくい報告や相談を、相手に合わせた
           <br />
           言い方に翻訳します。
         </p>
 
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}>
-          <SceneIllustration width={280} />
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: 8,
+            marginBottom: 20,
+          }}
+        >
+          {SCENES.map((scene) => (
+            <div key={scene.src}>
+              <img
+                src={scene.src}
+                alt={scene.alt}
+                width={800}
+                height={600}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  height: 'auto',
+                  aspectRatio: '4 / 3',
+                  objectFit: 'cover',
+                  borderRadius: 10,
+                  border: `1px solid ${theme.border}`,
+                }}
+              />
+              <p
+                style={{
+                  margin: '6px 0 0',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: theme.inkMuted,
+                }}
+              >
+                {scene.caption}
+              </p>
+            </div>
+          ))}
         </div>
       </div>
 
