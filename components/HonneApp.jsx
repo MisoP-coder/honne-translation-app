@@ -23,6 +23,7 @@ import {
   normalizeTraits,
   questionsFor,
   riskLabels,
+  situationPlaceholder,
   targetLabel,
   targetType,
   traitsSummary,
@@ -1094,11 +1095,7 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
               rows={5}
               value={situation}
               onChange={(e) => setSituation(e.target.value)}
-              placeholder={
-                targetType(selectedProfile) === 'teacher'
-                  ? '例:持ち物の連絡が配布物と食い違っていて子どもが困っている'
-                  : '例:納期に3日遅れそうと今日中に伝える必要がある'
-              }
+              placeholder={situationPlaceholder(selectedProfile, sceneType)}
               maxLength={2000}
               style={{ ...inputStyle, resize: 'none' }}
             />
