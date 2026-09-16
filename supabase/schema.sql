@@ -191,3 +191,26 @@ $$;
 -- 返すのは件数だけだが、呼べる相手はログイン済みの利用者に限る
 revoke all on function public.analysis_count_today() from public;
 grant execute on function public.analysis_count_today() to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 相手タイプ(上司 / 園・学校の先生)
+--   相手が変わると聞くべき情報も文面の作り方も変わるため、プロフィールごとに
+--   種別を持つ。既存の行はすべて上司なので既定値を 'boss' にする。
+--   traits(jsonb)の中身は種別ごとに異なるキーを持つので、列の追加は不要。
+-- ---------------------------------------------------------------------------
+alter table public.boss_profiles
+  add column if not exists target_type text not null default 'boss';
+
+alter table public.boss_profiles
+  drop constraint if exists boss_profiles_target_type_check;
+alter table public.boss_profiles
+  add constraint boss_profiles_target_type_check
+  check (target_type in ('boss', 'teacher'));
+
+-- ---------------------------------------------------------------------------
+-- 相談のシーン(先生向け)
+--   同じ「伝えにくいこと」でも、欠席連絡といじめの相談では必要な慎重さが
+--   まったく違う。実績として残し、次回の予測にも効かせる。
+-- ---------------------------------------------------------------------------
+alter table public.outcome_records
+  add column if not exists scene_type text not null default '';
