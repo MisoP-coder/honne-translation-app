@@ -125,7 +125,7 @@ export default function LoginForm() {
       <p style={{ fontSize: 13, color: theme.inkMuted, margin: '0 0 24px', lineHeight: 1.8 }}>
         {isReset
           ? '登録したメールアドレスを入力してください。新しいパスワードを決めるためのリンクをお送りします。'
-          : '上司ごとの傾向と、これまでの結果を覚えておくためにログインします。'}
+          : '上司や先生ごとの傾向と、これまでの結果を覚えておくためにログインします。'}
       </p>
 
       {!isReset && (

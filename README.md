@@ -156,8 +156,13 @@ app/
   api/analyze/route.js    Claude API を呼ぶサーバールート(APIキーはここだけで使用)
 components/
   HonneApp.jsx            アプリ本体(プロトタイプの UI を移植)
+  LandingPage.jsx         未ログイン時の紹介ページ
   LoginForm.jsx           ログイン / 新規登録 / メールリンク / 再設定メールの送信
   ResetPasswordForm.jsx   新しいパスワードの入力フォーム
+public/
+  scene-boss.jpg          紹介ページの場面イラスト(上司)
+  scene-teacher.jpg       紹介ページの場面イラスト(先生)
+  ogp.png                 SNS シェア時のアイキャッチ(1200x630)
 lib/
   supabase/client.js      ブラウザ用 Supabase クライアント
   supabase/server.js      サーバー用 Supabase クライアント
