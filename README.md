@@ -162,6 +162,7 @@ components/
 public/
   scene-boss.jpg          紹介ページの場面イラスト(上司)
   scene-teacher.jpg       紹介ページの場面イラスト(先生)
+  home-header.jpg         相手を選ぶ画面のイラスト
   ogp.png                 SNS シェア時のアイキャッチ(1200x630)
 lib/
   supabase/client.js      ブラウザ用 Supabase クライアント

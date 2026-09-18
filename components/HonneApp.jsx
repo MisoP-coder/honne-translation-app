@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect } from 'react';
 
 import { createClient } from '@/lib/supabase/client';
-import HeaderIllustration from '@/components/HeaderIllustration';
 import {
   OUTCOMES,
   RECORDS_THRESHOLD,
@@ -368,12 +367,24 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
             </form>
           </div>
 
-          <header style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <h1 style={h1}>言いにくいことの翻訳</h1>
-              <p style={{ ...sub, margin: 0 }}>相手を選んで、今の状況を相談してみましょう。</p>
-            </div>
-            <HeaderIllustration />
+          <header style={{ marginBottom: 16 }}>
+            <h1 style={h1}>言いにくいことの翻訳</h1>
+            <p style={{ ...sub, margin: '0 0 12px' }}>
+              相手を選んで、今の状況を相談してみましょう。
+            </p>
+            <img
+              src="/home-header.jpg"
+              alt="言いにくいことを抱えて考えこんでいる会社員と保護者のイラスト"
+              width={900}
+              height={497}
+              style={{
+                display: 'block',
+                width: '100%',
+                height: 'auto',
+                borderRadius: 12,
+                border: `1px solid ${theme.border}`,
+              }}
+            />
           </header>
 
           {userEmail && (
