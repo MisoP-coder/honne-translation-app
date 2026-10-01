@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 
 import { createClient } from '@/lib/supabase/client';
+import { translateAuthError } from '@/lib/authErrors';
 import {
   OUTCOMES,
   RECORDS_THRESHOLD,
@@ -51,7 +52,7 @@ const GUIDE_STEPS = [
   },
 ];
 
-export default function HonneApp({ userEmail, initialProfiles, initialRecords }) {
+export default function HonneApp({ userEmail, isAnonymous, initialProfiles, initialRecords }) {
   const supabaseRef = useRef(null);
   const getSupabase = () => {
     if (!supabaseRef.current) supabaseRef.current = createClient();
@@ -77,6 +78,10 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
   const [savingOutcome, setSavingOutcome] = useState(false);
   const [recorded, setRecorded] = useState(null);
   const [historyProfileId, setHistoryProfileId] = useState(null);
+  // 登録なしで使っている人が、あとからメールアドレスを登録するための入力
+  const [registerEmail, setRegisterEmail] = useState('');
+  const [registerPending, setRegisterPending] = useState(false);
+  const [registerNotice, setRegisterNotice] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState(null);
 
@@ -319,6 +324,39 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
     }
   };
 
+  // --- 登録なしで使っている人を、メールアドレス付きに切り替える -------------
+  //
+  // 新しくアカウントを作るのではなく、いまのアカウントにメールアドレスを
+  // 結びつける。利用者の id が変わらないので、登録した相手も実績もそのまま残る。
+  const submitRegister = async (e) => {
+    e.preventDefault();
+    if (registerPending) return;
+
+    setRegisterPending(true);
+    setError(null);
+    setRegisterNotice(null);
+    try {
+      const { error: updateError } = await getSupabase().auth.updateUser(
+        { email: registerEmail.trim() },
+        { emailRedirectTo: `${window.location.origin}/auth/callback` }
+      );
+      if (updateError) throw updateError;
+      setRegisterNotice(
+        '確認メールを送りました。差出人「Supabase Auth」の英語のメールですが、このアプリからのものです。中のリンクを、この画面を開いたままのブラウザで開くと登録が完了します。届かない場合は迷惑メールもご確認ください。'
+      );
+    } catch (err) {
+      setError(translateAuthError(err));
+    } finally {
+      setRegisterPending(false);
+    }
+  };
+
+  const openRegister = () => {
+    setRegisterNotice(null);
+    setError(null);
+    setView('register');
+  };
+
   const shareUrl = () => (typeof window === 'undefined' ? SITE_URL : window.location.origin);
 
   const copyText = async (text) => {
@@ -345,9 +383,67 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
 
   return (
     <div className="ht-shell">
+      {view === 'register' && (
+        <div>
+          <h1 style={{ ...h1, margin: '0 0 6px' }}>記録を残す</h1>
+          <p style={{ ...sub, margin: '0 0 20px' }}>
+            メールアドレスを登録すると、いま入っている相手と実績をそのまま引き継げます。別の端末からも見られるようになります。
+          </p>
+
+          <form onSubmit={submitRegister} style={{ ...card, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <label
+                htmlFor="register-email"
+                style={{ fontSize: 13, color: theme.inkMuted, display: 'block', marginBottom: 6 }}
+              >
+                メールアドレス
+              </label>
+              <input
+                id="register-email"
+                type="email"
+                required
+                autoComplete="email"
+                value={registerEmail}
+                onChange={(e) => setRegisterEmail(e.target.value)}
+                placeholder="you@example.com"
+                style={inputStyle}
+              />
+            </div>
+
+            {error && <p style={{ color: theme.danger, fontSize: 13, margin: 0, lineHeight: 1.8 }}>{error}</p>}
+            {registerNotice && (
+              <p style={{ color: theme.safe, fontSize: 13, margin: 0, lineHeight: 1.8 }}>{registerNotice}</p>
+            )}
+
+            <button
+              type="submit"
+              disabled={registerPending}
+              style={{ ...primaryBtn, opacity: registerPending ? 0.6 : 1 }}
+            >
+              {registerPending ? '送信中…' : '確認メールを送る'}
+            </button>
+          </form>
+
+          <p style={{ fontSize: 11, color: theme.inkMuted, margin: '14px 0 0', lineHeight: 1.8 }}>
+            パスワードはここでは決めません。次回からは「メールリンク」でログインできます。パスワードを使いたい場合は、ログイン画面の「パスワードを忘れた方はこちら」から決められます。
+          </p>
+
+          <button
+            style={{ ...ghostBtn, width: '100%', marginTop: 16 }}
+            onClick={() => {
+              setError(null);
+              setView('home');
+            }}
+          >
+            あとにする
+          </button>
+        </div>
+      )}
+
       {view === 'home' && (
         <>
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 2 }}>
+            {!isAnonymous && (
             <form action="/auth/signout" method="post">
               <button
                 type="submit"
@@ -364,6 +460,7 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
                 ログアウト
               </button>
             </form>
+            )}
           </div>
 
           <header style={{ marginBottom: 16 }}>
@@ -386,13 +483,40 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
             />
           </header>
 
-          {userEmail && (
-            <p style={{ fontSize: 11, color: theme.inkMuted, margin: '0 0 16px' }}>
-              {userEmail}
-              <span style={{ color: theme.accent, fontWeight: 600, marginLeft: 8 }}>
-                無料で使えます
-              </span>
-            </p>
+          {isAnonymous && (profiles.length > 0 || records.length > 0) ? (
+            <div
+              style={{
+                ...card,
+                background: theme.cautionSoft,
+                borderColor: theme.caution,
+                padding: '14px 16px',
+                marginBottom: 16,
+              }}
+            >
+              <p style={{ margin: '0 0 6px', fontSize: 13, fontWeight: 600, color: theme.caution }}>
+                登録なしで使っています
+              </p>
+              <p style={{ margin: '0 0 12px', fontSize: 12, color: theme.ink, lineHeight: 1.8 }}>
+                このままでも使えますが、<strong>ブラウザのデータを消すと、登録した相手も実績も戻せません。</strong>
+                別の端末から見ることもできません。
+              </p>
+              <button
+                type="button"
+                onClick={openRegister}
+                style={{ ...primaryBtn, width: '100%', fontSize: 13 }}
+              >
+                メールアドレスを登録して残す
+              </button>
+            </div>
+          ) : (
+            userEmail && (
+              <p style={{ fontSize: 11, color: theme.inkMuted, margin: '0 0 16px' }}>
+                {userEmail}
+                <span style={{ color: theme.accent, fontWeight: 600, marginLeft: 8 }}>
+                  無料で使えます
+                </span>
+              </p>
+            )
           )}
 
           {error && <p style={{ color: theme.danger, fontSize: 13, margin: '0 0 12px' }}>{error}</p>}
@@ -1400,6 +1524,29 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
               })()}
             </p>
           </div>
+
+          {isAnonymous && (
+            <div
+              style={{
+                ...card,
+                background: theme.cautionSoft,
+                borderColor: theme.caution,
+                padding: '14px 16px',
+                marginTop: 16,
+              }}
+            >
+              <p style={{ margin: '0 0 10px', fontSize: 12, color: theme.ink, lineHeight: 1.8 }}>
+                この実績は、いまのところ<strong>このブラウザの中だけ</strong>にあります。メールアドレスを登録すると、そのまま引き継いで残せます。
+              </p>
+              <button
+                type="button"
+                onClick={openRegister}
+                style={{ ...primaryBtn, width: '100%', fontSize: 13 }}
+              >
+                メールアドレスを登録して残す
+              </button>
+            </div>
+          )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
             <button style={{ ...primaryBtn, width: '100%' }} onClick={() => startInput(selectedProfile.id)}>

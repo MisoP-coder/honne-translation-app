@@ -157,6 +157,7 @@ app/
 components/
   HonneApp.jsx            アプリ本体(プロトタイプの UI を移植)
   LandingPage.jsx         未ログイン時の紹介ページ
+  StartAnonymously.jsx    登録なしで始めるボタン(匿名ログイン)
   SiteAnalytics.jsx       訪問者数の集計(Vercel Web Analytics)
   LoginForm.jsx           ログイン / 新規登録 / メールリンク / 再設定メールの送信
   ResetPasswordForm.jsx   新しいパスワードの入力フォーム

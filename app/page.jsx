@@ -28,6 +28,7 @@ export default async function Home() {
   return (
     <HonneApp
       userEmail={user.email ?? ''}
+      isAnonymous={user.is_anonymous === true}
       initialProfiles={profiles ?? []}
       initialRecords={records ?? []}
     />
