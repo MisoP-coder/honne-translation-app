@@ -61,5 +61,9 @@ export async function proxy(request) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+  // _vercel はアクセス解析のスクリプトと計測の送信先。ここを通すと
+  // JS を要求したブラウザにログイン画面の HTML が返り、読み込みに失敗する
+  matcher: [
+    '/((?!_next/static|_next/image|_vercel|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
 };

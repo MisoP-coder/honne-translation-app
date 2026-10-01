@@ -13,7 +13,6 @@ import {
   SHARE_TARGETS,
   SHARE_TEXT,
   SITE_URL,
-  FREE_UNTIL,
   channelsFor,
   channelMismatchNote,
   defaultChannel,
@@ -391,7 +390,7 @@ export default function HonneApp({ userEmail, initialProfiles, initialRecords })
             <p style={{ fontSize: 11, color: theme.inkMuted, margin: '0 0 16px' }}>
               {userEmail}
               <span style={{ color: theme.accent, fontWeight: 600, marginLeft: 8 }}>
-                {FREE_UNTIL}まで無料
+                無料で使えます
               </span>
             </p>
           )}

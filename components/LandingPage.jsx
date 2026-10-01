@@ -1,7 +1,7 @@
 import Link from 'next/link';
 
 import { theme, FONT_HEAD, primaryBtn, card } from '@/lib/theme';
-import { RECORDS_THRESHOLD, FREE_UNTIL } from '@/lib/constants';
+import { RECORDS_THRESHOLD } from '@/lib/constants';
 
 /**
  * ヒーローに並べる2枚の場面イラスト。
@@ -186,7 +186,7 @@ export default function LandingPage() {
           margin: '-22px 0 32px',
         }}
       >
-        {FREE_UNTIL}まで無料で使えます
+        登録も利用も無料です
       </p>
 
       {/* 生成例。初めての人が一番知りたいのは「何が出てくるか」 */}
