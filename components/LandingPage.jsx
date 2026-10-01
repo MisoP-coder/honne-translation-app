@@ -1,6 +1,8 @@
 import Link from 'next/link';
 
-import { theme, FONT_HEAD, primaryBtn, card } from '@/lib/theme';
+import StartAnonymously from '@/components/StartAnonymously';
+
+import { theme, FONT_HEAD, card } from '@/lib/theme';
 import { RECORDS_THRESHOLD } from '@/lib/constants';
 
 /**
@@ -83,15 +85,6 @@ const REASONS = [
 ];
 
 export default function LandingPage() {
-  const cta = {
-    ...primaryBtn,
-    display: 'block',
-    width: '100%',
-    textAlign: 'center',
-    textDecoration: 'none',
-    padding: '15px 16px',
-    fontSize: 15,
-  };
   const sectionTitle = {
     fontFamily: FONT_HEAD,
     fontSize: 17,
@@ -164,29 +157,30 @@ export default function LandingPage() {
         </div>
       </div>
 
-      <Link href="/login" style={cta}>
-        無料ではじめる
-      </Link>
-      <p
-        style={{
-          fontSize: 11,
-          color: theme.inkMuted,
-          textAlign: 'center',
-          margin: '10px 0 32px',
-        }}
-      >
-        メールアドレスとパスワードだけ。30秒で始められます。
-      </p>
+      <StartAnonymously
+        note={
+          <>
+            メールアドレスの入力はありません。押すとすぐ使えます。
+            <br />
+            記録を残したくなったら、あとから登録できます。
+          </>
+        }
+      />
       <p
         style={{
           fontSize: 12,
           color: theme.accent,
           fontWeight: 700,
           textAlign: 'center',
-          margin: '-22px 0 32px',
+          margin: '10px 0 10px',
         }}
       >
         登録も利用も無料です
+      </p>
+      <p style={{ fontSize: 11, textAlign: 'center', margin: '0 0 32px' }}>
+        <Link href="/login" style={{ color: theme.inkMuted }}>
+          アカウントをお持ちの方はこちら
+        </Link>
       </p>
 
       {/* 生成例。初めての人が一番知りたいのは「何が出てくるか」 */}
@@ -319,18 +313,11 @@ export default function LandingPage() {
         </p>
       </div>
 
-      <Link href="/login" style={cta}>
-        無料ではじめる
-      </Link>
-      <p
-        style={{
-          fontSize: 11,
-          color: theme.inkMuted,
-          textAlign: 'center',
-          margin: '10px 0 0',
-        }}
-      >
-        すでに登録済みの方も、こちらからログインできます。
+      <StartAnonymously />
+      <p style={{ fontSize: 11, textAlign: 'center', margin: '10px 0 0' }}>
+        <Link href="/login" style={{ color: theme.inkMuted }}>
+          すでに登録済みの方は、こちらからログイン
+        </Link>
       </p>
 
       <div
