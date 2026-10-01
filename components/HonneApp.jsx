@@ -37,6 +37,10 @@ import {
   inputStyle,
 } from '@/lib/theme';
 
+// メールアドレスを登録したあと、パスワードを決めてもらうための印。
+// Supabase 側にパスワードの有無を問い合わせる方法が無いため、ブラウザに持たせる
+const NEEDS_PASSWORD_KEY = 'honne:needs-password';
+
 const GUIDE_STEPS = [
   {
     title: '相手を登録する',
@@ -82,11 +86,29 @@ export default function HonneApp({ userEmail, isAnonymous, initialProfiles, init
   const [registerEmail, setRegisterEmail] = useState('');
   const [registerPending, setRegisterPending] = useState(false);
   const [registerNotice, setRegisterNotice] = useState(null);
+  // 確認メールのリンクから戻ってきた直後かどうか。パスワードを決める案内を出すのに使う
+  const [needsPassword, setNeedsPassword] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [passwordPending, setPasswordPending] = useState(false);
+  const [passwordDone, setPasswordDone] = useState(false);
+  const [passwordError, setPasswordError] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState(null);
 
   const stepTimerRef = useRef(null);
   useEffect(() => () => clearInterval(stepTimerRef.current), []);
+
+  // メールアドレスの登録を始めたときに印を付けておき、確認が済んで
+  // 戻ってきたらパスワードを決めてもらう。
+  // パスワードが設定済みかどうかは外から分からないので、この印で代える
+  useEffect(() => {
+    if (isAnonymous || !userEmail) return;
+    try {
+      if (window.localStorage.getItem(NEEDS_PASSWORD_KEY)) setNeedsPassword(true);
+    } catch {
+      /* localStorage が使えない環境では出さない */
+    }
+  }, [isAnonymous, userEmail]);
 
   const selectedProfile = profiles.find((p) => p.id === selectedProfileId);
   // 予測に使えるのは結果が入った記録だけ。結果待ち(outcome が null)は数えない
@@ -341,6 +363,11 @@ export default function HonneApp({ userEmail, isAnonymous, initialProfiles, init
         { emailRedirectTo: `${window.location.origin}/auth/callback` }
       );
       if (updateError) throw updateError;
+      try {
+        window.localStorage.setItem(NEEDS_PASSWORD_KEY, '1');
+      } catch {
+        /* localStorage が使えなくても登録自体は進められる */
+      }
       setRegisterNotice(
         '確認メールを送りました。差出人「Supabase Auth」の英語のメールですが、このアプリからのものです。中のリンクを、この画面を開いたままのブラウザで開くと登録が完了します。届かない場合は迷惑メールもご確認ください。'
       );
@@ -348,6 +375,36 @@ export default function HonneApp({ userEmail, isAnonymous, initialProfiles, init
       setError(translateAuthError(err));
     } finally {
       setRegisterPending(false);
+    }
+  };
+
+  const clearNeedsPassword = () => {
+    try {
+      window.localStorage.removeItem(NEEDS_PASSWORD_KEY);
+    } catch {
+      /* 消せなくても表示を閉じる */
+    }
+    setNeedsPassword(false);
+  };
+
+  // メールアドレスの確認が済んだあとに呼ぶ。
+  // Supabase は、確認前のアカウントにはパスワードを設定できない
+  const submitPassword = async (e) => {
+    e.preventDefault();
+    if (passwordPending) return;
+
+    setPasswordPending(true);
+    setPasswordError(null);
+    try {
+      const { error: updateError } = await getSupabase().auth.updateUser({ password: newPassword });
+      if (updateError) throw updateError;
+      setNewPassword('');
+      setPasswordDone(true);
+      clearNeedsPassword();
+    } catch (err) {
+      setPasswordError(translateAuthError(err));
+    } finally {
+      setPasswordPending(false);
     }
   };
 
@@ -425,7 +482,7 @@ export default function HonneApp({ userEmail, isAnonymous, initialProfiles, init
           </form>
 
           <p style={{ fontSize: 11, color: theme.inkMuted, margin: '14px 0 0', lineHeight: 1.8 }}>
-            パスワードはここでは決めません。次回からは「メールリンク」でログインできます。パスワードを使いたい場合は、ログイン画面の「パスワードを忘れた方はこちら」から決められます。
+            パスワードは、メールのリンクを開いて戻ってきたあとに決めます(先に決めることはできません)。決める前にログアウトしてしまった場合は、ログイン画面の「メールリンク」から入り直せます。
           </p>
 
           <button
@@ -517,6 +574,65 @@ export default function HonneApp({ userEmail, isAnonymous, initialProfiles, init
                 </span>
               </p>
             )
+          )}
+
+          {needsPassword && !isAnonymous && userEmail && (
+            <div style={{ ...card, borderColor: theme.accent, marginBottom: 16 }}>
+              <p style={{ margin: '0 0 6px', fontSize: 13, fontWeight: 600 }}>
+                登録が完了しました
+              </p>
+              <p style={{ margin: '0 0 12px', fontSize: 12, color: theme.inkMuted, lineHeight: 1.8 }}>
+                最後にパスワードを決めてください。
+                <strong>決めておかないと、ログアウトしたあと毎回メールのリンクが必要になります。</strong>
+              </p>
+              <form onSubmit={submitPassword} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <input
+                  type="password"
+                  required
+                  minLength={8}
+                  autoComplete="new-password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="8文字以上"
+                  style={inputStyle}
+                />
+                {passwordError && (
+                  <p style={{ color: theme.danger, fontSize: 12, margin: 0, lineHeight: 1.8 }}>
+                    {passwordError}
+                  </p>
+                )}
+                <button
+                  type="submit"
+                  disabled={passwordPending}
+                  style={{ ...primaryBtn, width: '100%', fontSize: 13, opacity: passwordPending ? 0.6 : 1 }}
+                >
+                  {passwordPending ? '設定中…' : 'このパスワードにする'}
+                </button>
+                <button
+                  type="button"
+                  onClick={clearNeedsPassword}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    color: theme.inkMuted,
+                    fontSize: 12,
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                  }}
+                >
+                  あとで決める(メールリンクでログインします)
+                </button>
+              </form>
+            </div>
+          )}
+
+          {passwordDone && (
+            <div style={{ ...card, borderColor: theme.safe, background: theme.safeSoft, marginBottom: 16 }}>
+              <p style={{ margin: 0, fontSize: 12, color: theme.safe, lineHeight: 1.8 }}>
+                パスワードを設定しました。次からは、メールアドレスとパスワードでログインできます。
+              </p>
+            </div>
           )}
 
           {error && <p style={{ color: theme.danger, fontSize: 13, margin: '0 0 12px' }}>{error}</p>}
