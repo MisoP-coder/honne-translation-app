@@ -4,14 +4,62 @@
 -- 使い方: Supabase ダッシュボード > SQL Editor に貼り付けて実行します。
 --         SQL Editor は RLS を迂回するため、全ユーザーぶんが見えます。
 --
---         【重要】ファイル全体を一度に貼らず、下の 1〜6 のブロックを
+--         【重要】ファイル全体を一度に貼らず、下の 0〜10 のブロックを
 --         1つずつ貼って実行してください。まとめて実行すると、最後の
 --         結果しか表示されません。
+--
+--         続けるか / やめるか を決めたいだけなら、0 だけで足ります。
 --
 -- 料金の前提(2026年9月時点、claude-sonnet-5):
 --   入力 $2 / 100万トークン、出力 $10 / 100万トークン、為替 150円/$
 --   モデルや為替を変えたら、下の CTE の数値を書き換えてください。
 -- ============================================================================
+
+-- ----------------------------------------------------------------------------
+-- 0. 続けるかどうかを決めるための1枚。これだけ実行すれば判断できる
+--    スマホでも読めるよう、横に広げず縦に並べている
+-- ----------------------------------------------------------------------------
+with price as (
+  select 2.0::numeric as usd_in, 10.0::numeric as usd_out, 150::numeric as jpy
+),
+per_user as (
+  select user_id, count(*) as n from public.analysis_logs group by user_id
+),
+calc as (
+  select
+    (select count(*) from auth.users)                                    as 登録者,
+    (select count(distinct user_id) from public.analysis_logs)           as 相談者,
+    (select count(*) from public.analysis_logs)                          as 相談回数,
+    (select count(*) from per_user where n >= 2)                         as 二回以上,
+    (select count(*) from public.analysis_logs
+      where created_at >= now() - interval '7 days')                     as 直近7日の回数,
+    (select count(distinct user_id) from public.analysis_logs
+      where created_at >= now() - interval '7 days')                     as 直近7日の人数,
+    (select round(sum(((input_tokens * p.usd_in / 1000000)
+                     + (output_tokens * p.usd_out / 1000000)) * p.jpy), 0)
+       from public.analysis_logs, price p)                               as 累計原価,
+    (select count(*) from public.outcome_records where outcome is not null) as 記録数,
+    (select count(*) from public.analysis_logs where records_in_prompt >= 2) as 実績ベース
+)
+select v.項目, v.数字, v.見かた
+from calc c,
+lateral (values
+  (1, '登録した人',       c.登録者::text || ' 人', '—'),
+  (2, 'うち相談した人',   c.相談者::text || ' 人',
+      coalesce(round(100.0 * c.相談者 / nullif(c.登録者, 0))::text || '% が相談まで到達', '—')),
+  (3, '相談回数',         c.相談回数::text || ' 回', '—'),
+  (4, '2回以上使った人',  c.二回以上::text || ' 人',
+      coalesce(round(100.0 * c.二回以上 / nullif(c.相談者, 0), 1)::text || '%  … 3割超なら定着あり', '—')),
+  (5, '直近7日の相談',    c.直近7日の回数::text || ' 回 / ' || c.直近7日の人数::text || ' 人',
+      case when c.直近7日の回数 = 0 then '今は誰も使っていない' else 'まだ使われている' end),
+  (6, '累計の原価',       coalesce(c.累計原価::text, '0') || ' 円',
+      coalesce('1回あたり ' || round(c.累計原価 / nullif(c.相談回数, 0), 1)::text || ' 円', '—')),
+  (7, '結果の記録率',     c.記録数::text || ' 件',
+      coalesce(round(100.0 * c.記録数 / nullif(c.相談回数, 0), 1)::text || '%  … 学習が回っているか', '—')),
+  (8, '実績ベースの予測', c.実績ベース::text || ' 回',
+      coalesce(round(100.0 * c.実績ベース / nullif(c.相談回数, 0), 1)::text || '%  … 1割超ならこのアプリの価値が出ている', '—'))
+) as v(n, 項目, 数字, 見かた)
+order by v.n;
 
 -- ----------------------------------------------------------------------------
 -- 1. 全体サマリー。まずこれを見る
@@ -89,10 +137,11 @@ from per_user;
 
 -- ----------------------------------------------------------------------------
 -- 5. 実績データが予測に使われているか
---    records_in_prompt が 3 以上なら、その上司専用の予測に切り替わっている
+--    records_in_prompt が 2 以上なら、その相手専用の予測に切り替わっている
+--    (件数は lib/constants.js の RECORDS_THRESHOLD と合わせること)
 -- ----------------------------------------------------------------------------
 select
-  case when records_in_prompt >= 3 then '実績ベース' else '一般論ベース' end as 予測の種類,
+  case when records_in_prompt >= 2 then '実績ベース' else '一般論ベース' end as 予測の種類,
   count(*) as 回数
 from public.analysis_logs
 group by 1;
@@ -142,15 +191,15 @@ order by 登録日;
 -- ----------------------------------------------------------------------------
 -- 9. なぜ「実績ベース」に切り替わらないのかを調べる
 --    5 が「一般論ベース」ばかりのときに実行する。
---    実績は上司ごとに数えるので、相談する上司が分散していると、
---    合計では3件を超えていても1人あたりでは3件に届かないことがある。
+--    実績は相手ごとに数えるので、相談する相手が分散していると、
+--    合計では2件を超えていても1人あたりでは2件に届かないことがある。
 -- ----------------------------------------------------------------------------
 select
-  b.name                                             as 上司,
+  b.name                                             as 相手,
   count(distinct a.id)                               as 相談回数,
   count(distinct o.id)                               as 記録数,
-  case when count(distinct o.id) >= 3
-       then '実績が効く' else 'あと ' || (3 - count(distinct o.id)) || ' 件' end as 状態
+  case when count(distinct o.id) >= 2
+       then '実績が効く' else 'あと ' || (2 - count(distinct o.id)) || ' 件' end as 状態
 from public.boss_profiles b
 left join public.analysis_logs   a on a.profile_id = b.id
 left join public.outcome_records o on o.profile_id = b.id
