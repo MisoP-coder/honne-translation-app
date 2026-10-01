@@ -29,9 +29,17 @@ export default function PrivacyPage() {
           <strong>利用ログ</strong> —
           候補生成の日時、消費した文字数の目安、使用したモデル名。相談内容そのものは含みません
         </li>
+        <li>
+          <strong>閲覧の記録</strong> —
+          どのページが何回見られたか、どこから来たか、おおよその国、端末の種類とブラウザ。
+          何人の方に届いているかを知るためのもので、<strong>個人を特定できる情報は含みません</strong>
+        </li>
       </ul>
       <p style={s.note}>
-        本サービスは、アクセス解析ツールや広告目的の追跡技術を使用していません。
+        閲覧の記録には Vercel Web Analytics を使用しています。Cookie
+        を使わず、他のサイトでの行動を追跡することもありません。URL
+        に付く引き渡し用の文字列(ログインや再設定のリンクに含まれるもの)は、送信前に取り除いています。
+        広告目的の追跡技術は使用していません。
       </p>
 
       <h2 style={s.h2}>2. 利用目的</h2>
@@ -58,7 +66,7 @@ export default function PrivacyPage() {
           <strong>Supabase</strong> — アカウント情報と保存データの管理
         </li>
         <li>
-          <strong>Vercel</strong> — 本サービスの配信
+          <strong>Vercel</strong> — 本サービスの配信と、閲覧数の集計(Vercel Web Analytics)
         </li>
       </ul>
       <p style={s.p}>
@@ -77,7 +85,8 @@ export default function PrivacyPage() {
       <h2 style={s.h2}>5. Cookie の利用</h2>
       <p style={s.p}>
         ログイン状態を保つために Cookie
-        を使用します。広告の配信や、他サイトでの行動を追跡する目的では使用していません。
+        を使用します。広告の配信や、他サイトでの行動を追跡する目的では使用していません。閲覧数の集計にも
+        Cookie は使用していません。
       </p>
 
       <h2 style={s.h2}>6. 安全管理</h2>

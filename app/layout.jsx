@@ -1,5 +1,7 @@
 import './globals.css';
 
+import SiteAnalytics from '@/components/SiteAnalytics';
+
 import { SITE_URL, SHARE_TEXT } from '@/lib/constants';
 
 const TITLE = '言いにくいことの翻訳';
@@ -35,7 +37,10 @@ export const viewport = {
 export default function RootLayout({ children }) {
   return (
     <html lang="ja">
-      <body>{children}</body>
+      <body>
+        {children}
+        <SiteAnalytics />
+      </body>
     </html>
   );
 }
