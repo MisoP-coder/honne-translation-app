@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 import { createClient } from '@/lib/supabase/client';
 import { translateAuthError } from '@/lib/authErrors';
@@ -57,6 +58,7 @@ const GUIDE_STEPS = [
 ];
 
 export default function HonneApp({ userEmail, isAnonymous, initialProfiles, initialRecords }) {
+  const router = useRouter();
   const supabaseRef = useRef(null);
   const getSupabase = () => {
     if (!supabaseRef.current) supabaseRef.current = createClient();
@@ -358,7 +360,7 @@ export default function HonneApp({ userEmail, isAnonymous, initialProfiles, init
     setError(null);
     setRegisterNotice(null);
     try {
-      const { error: updateError } = await getSupabase().auth.updateUser(
+      const { data, error: updateError } = await getSupabase().auth.updateUser(
         { email: registerEmail.trim() },
         { emailRedirectTo: `${window.location.origin}/auth/callback` }
       );
@@ -368,6 +370,19 @@ export default function HonneApp({ userEmail, isAnonymous, initialProfiles, init
       } catch {
         /* localStorage が使えなくても登録自体は進められる */
       }
+
+      // Supabase 側でメールの確認を求めない設定になっていると、確認メールは
+      // 送られず、その場で反映される。その場合に「メールを確認してください」と
+      // 出すと、永遠に来ないメールを待たせることになる
+      const updated = data?.user;
+      const waitingForEmail = Boolean(updated?.new_email);
+      if (!waitingForEmail && updated?.email) {
+        setNeedsPassword(true);
+        setView('home');
+        router.refresh();
+        return;
+      }
+
       setRegisterNotice(
         '確認メールを送りました。差出人「Supabase Auth」の英語のメールですが、このアプリからのものです。中のリンクを、この画面を開いたままのブラウザで開くと登録が完了します。届かない場合は迷惑メールもご確認ください。'
       );
