@@ -132,10 +132,7 @@ Supabase の **Authentication → Sign In / Providers**(プロジェクト URL �
 
 1. [Resend](https://resend.com) に登録(無料枠 3,000通/月)
 2. `misop-craft.com` を追加する。DNS レコードが表示されるので、下の 2-6b のとおりお名前.com に登録する
-3. Resend の画面が **Verified** になったら、API キーを発行する
-4. Supabase の **Authentication → Emails → SMTP Settings** に Resend の情報を入れる
-5. 上限が1時間あたり30通程度まで上がる
-6. あわせてテンプレートのロックも外れるので、`docs/email-templates.md` の文面を貼れば日本語のメールになる
+3. Resend の画面が **Verified** になったら、2-6c に進む
 
 > **テスト中にメールが届かなくなったら、まず1時間空けてください。** 設定の問題ではなく、この2通の上限に当たっているだけのことがほとんどです。
 
@@ -176,6 +173,55 @@ Resend が出すのは、だいたい次の4行です(内容はプロジェク�
 1行ごとに **追加** を押し、全部入れたら下へスクロールして **確認画面へ進む → 設定する**。
 
 反映には数十分〜数時間かかります。Resend の画面が **Verified** に変われば完了です。
+
+### 2-6c. Resend と Supabase をつなぐ
+
+**Verified になってから**行います。
+
+#### 1. Resend で API キーを作る
+
+Resend の **API Keys → Create API Key**。権限は **Sending access** だけで足ります。
+
+> **表示されるのはこの1回だけです。** 閉じると二度と見られないので、その場で次の手順に貼ってください。
+
+#### 2. Supabase に入れる
+
+**Authentication → Emails → SMTP Settings** で **Enable Custom SMTP** をオンにして、次を入れます。
+
+| 項目 | 入れる値 |
+| --- | --- |
+| Sender email | `noreply@misop-craft.com` |
+| Sender name | `言いにくいことの翻訳` |
+| Host | `smtp.resend.com` |
+| Port | `465` |
+| Username | `resend` |
+| Password | さきほどの API キー(`re_` で始まる文字列) |
+
+> **Username は `resend` という固定の文字列**です。自分のアカウント名ではありません。
+>
+> **Sender email は、認証したドメインのアドレスにしてください。** Gmail のアドレスを入れると送れません。`noreply@` の部分は好きな名前で構いません(受信はしません)。
+
+**Save** を押して保存します。
+
+#### 3. 送信数の上限を上げる
+
+**Authentication → Rate Limits** の「Emails sent per hour」を確認します。標準のままだと **2** なので、**30** 程度に上げてください。ここを上げないと、SMTP を設定しても詰まりは解消しません。
+
+#### 4. 文面を日本語にする
+
+カスタム SMTP を設定するとテンプレートのロックが外れます。
+**Authentication → Emails → Templates** に、[`docs/email-templates.md`](email-templates.md) の件名と本文を貼ってください。
+
+#### 5. 確認する
+
+ログイン画面の「パスワードを忘れた方はこちら」からメールを送ります。
+
+- [ ] 届く
+- [ ] 差出人が `noreply@misop-craft.com`(`Supabase Auth` ではない)
+- [ ] 件名と本文が日本語
+- [ ] リンクから再設定できる
+
+ここまで通れば、アプリ側の「英語のメールが届きます」という案内は不要になります。`components/LoginForm.jsx` の文面から外してください。
 
 ## 3. 公開前の最終確認
 
