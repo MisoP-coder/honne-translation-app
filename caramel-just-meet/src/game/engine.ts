@@ -94,7 +94,7 @@ export interface GameState {
 
 export const POINTS = { perfect: 300, good: 100 } as const;
 export const COMBO_BONUS = 10;
-export const MAX_SPEED = 2.6;
+export const MAX_SPEED = 2.3;
 const FALL_TIME = 0.6;
 const DROP_INITIAL_VY = 0;
 
@@ -121,8 +121,9 @@ export function createConfig(width: number, height: number): GameConfig {
     puddingTopHalfWidth,
     puddingBottomHalfWidth,
     puddingHeight,
-    perfectRange: puddingTopHalfWidth * 0.22,
-    goodRange: puddingTopHalfWidth * 0.75,
+    perfectRange: puddingTopHalfWidth * 0.3,
+    // 見えているプリンの頂上（半幅いっぱい）に雫の中心が乗っていればセーフ
+    goodRange: puddingTopHalfWidth,
     gravity: (2 * distance) / (FALL_TIME * FALL_TIME),
     amplitude: Math.max(0, Math.min(width * 0.28, width / 2 - puddingBottomHalfWidth - 12)),
     slideDuration: 0.9,
@@ -175,7 +176,7 @@ export function wobbleAt(wobble: Wobble, phase: number): number {
 
 /** 連続成功数に応じて揺れが速くなる */
 export function speedFor(combo: number): number {
-  return Math.min(1 + combo * 0.05, MAX_SPEED);
+  return Math.min(1 + combo * 0.04, MAX_SPEED);
 }
 
 export function judgeOffset(offset: number, config: GameConfig): Judge {
