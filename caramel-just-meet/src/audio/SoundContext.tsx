@@ -9,6 +9,20 @@ interface SoundContextValue {
   settings: SoundSettings;
   /** BGM / 効果音のオン・オフや音量を変える（端末に保存される） */
   updateSettings: (next: Partial<SoundSettings>) => void;
+  /** ブラウザで、まだ一度も画面に触れていない（＝音を出させてもらえない）とき true */
+  needsTapForAudio: boolean;
+}
+
+/**
+ * ブラウザが「ユーザーが操作した」と認めて音を出させてくれるイベント。
+ * 指で触れた瞬間（pointerdown / touchstart）は認められず、指を離したとき（pointerup / touchend / click）に認められる。
+ * iPhone の Safari は特に厳しく、これ以外のイベントで再生しようとすると失敗する。
+ */
+export const AUDIO_UNLOCK_EVENTS = ['pointerup', 'touchend', 'click', 'keydown'] as const;
+
+function hasUserActivated(): boolean {
+  const nav = typeof navigator !== 'undefined' ? (navigator as { userActivation?: { hasBeenActive?: boolean } }) : undefined;
+  return nav?.userActivation?.hasBeenActive === true;
 }
 
 const SoundContext = createContext<SoundContextValue | null>(null);
@@ -24,6 +38,9 @@ export function SoundProvider({ children, manager: injected }: Props) {
   const manager = useMemo(() => injected ?? new SoundManager(), [injected]);
   const [settings, setSettings] = useState<SoundSettings>(manager.getSettings());
   const touchedRef = useRef<() => void>(() => {});
+  const [needsTapForAudio, setNeedsTapForAudio] = useState(
+    () => Platform.OS === 'web' && typeof document !== 'undefined' && !hasUserActivated(),
+  );
 
   useEffect(() => {
     manager.load();
@@ -37,18 +54,18 @@ export function SoundProvider({ children, manager: injected }: Props) {
     touchedRef.current = () => {
       touched = true;
     };
-    // ブラウザは最初に画面に触れるまで音を出せないので、最初のタッチで BGM を鳴らし直す
+    // ブラウザは最初に画面に触れるまで音を出せないので、触れたら BGM を鳴らし直す。
+    // 1 回目でうまく鳴らなかったときのために、タップのたびに試す（鳴っていれば何もしない）
     let removeUnlock = () => {};
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       const unlock = () => {
         manager.unlock();
-        removeUnlock();
+        setNeedsTapForAudio(false);
       };
-      document.addEventListener('pointerdown', unlock, true);
-      document.addEventListener('keydown', unlock, true);
+      const doc = document;
+      for (const type of AUDIO_UNLOCK_EVENTS) doc.addEventListener(type, unlock, true);
       removeUnlock = () => {
-        document.removeEventListener('pointerdown', unlock, true);
-        document.removeEventListener('keydown', unlock, true);
+        for (const type of AUDIO_UNLOCK_EVENTS) doc.removeEventListener(type, unlock, true);
       };
     }
     return () => {
@@ -68,8 +85,9 @@ export function SoundProvider({ children, manager: injected }: Props) {
         setSettings(applied);
         void saveSoundSettings(applied);
       },
+      needsTapForAudio,
     }),
-    [manager, settings],
+    [manager, settings, needsTapForAudio],
   );
 
   return <SoundContext.Provider value={value}>{children}</SoundContext.Provider>;

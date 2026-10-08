@@ -86,6 +86,13 @@ export function TitleScreen({ highScore, onStart, onRanking }: Props) {
         )}
       </View>
 
+      {/* ブラウザは画面に触れるまで音を出させてくれないので、そのことを知らせる */}
+      {sound?.needsTapForAudio && s?.bgmEnabled && s.bgmVolume > 0 && (
+        <Text testID="tap-for-sound" style={styles.tapHint}>
+          🔊 画面をタップすると BGM が流れます
+        </Text>
+      )}
+
       <View style={styles.buttons}>
         <GameButton testID="start" label="スタート" onPress={onStart} />
         <GameButton testID="open-ranking" label="世界ランキング" variant="secondary" onPress={onRanking} />
@@ -129,4 +136,15 @@ const styles = StyleSheet.create({
   bestText: { fontSize: 14, color: colors.textSub, fontWeight: '700' },
   bestTitle: { fontSize: 13, color: colors.textSub, marginTop: 2 },
   buttons: { marginTop: 24, gap: 12 },
+  tapHint: {
+    marginTop: 14,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    overflow: 'hidden',
+    backgroundColor: colors.backgroundDeep,
+    fontSize: 13,
+    fontWeight: '800',
+    color: colors.caramel,
+  },
 });

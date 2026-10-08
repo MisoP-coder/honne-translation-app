@@ -165,6 +165,8 @@ export class SoundManager {
   unlock(): void {
     if (this.suspended || !this.bgmAudible() || !this.wantedBgm) return;
     const player = this.players.get(this.wantedBgm);
+    // タップのたびに呼ばれる。鳴っている最中の play() は何も起きないので、そのまま呼んでよい
+    // （expo-audio の playing はブラウザに再生を断られても true になるので、判定には使えない）
     try {
       player?.play();
       this.currentBgm = this.wantedBgm;

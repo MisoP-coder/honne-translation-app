@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { Platform } from 'react-native';
 
 import App from '../App';
 import {
@@ -325,5 +326,68 @@ describe('音の設定の値', () => {
     const s = { bgmEnabled: false, bgmVolume: 0.3, seEnabled: true, seVolume: 1 };
     await saveSoundSettings(s);
     await expect(loadSoundSettings()).resolves.toEqual(s);
+  });
+});
+
+describe('ブラウザで最初のタップから BGM を鳴らす', () => {
+  const realOS = Platform.OS;
+  let doc: EventTarget;
+
+  beforeEach(async () => {
+    await AsyncStorage.clear();
+    // テスト環境にはブラウザの document がないので、イベントだけ扱える代わりを置く
+    doc = new EventTarget();
+    (globalThis as { document?: unknown }).document = doc;
+    Object.defineProperty(Platform, 'OS', { configurable: true, get: () => 'web' });
+  });
+  afterEach(() => {
+    delete (globalThis as { document?: unknown }).document;
+    Object.defineProperty(Platform, 'OS', { configurable: true, get: () => realOS });
+  });
+
+  const fire = (type: string) => act(async () => void doc.dispatchEvent(new Event(type)));
+
+  it('指で触れた瞬間ではなく、指を離したときに BGM を鳴らし、案内を消す', async () => {
+    const { manager, players } = fakeManager();
+    await render(<App rankingRepository={new MockRankingRepository()} soundManager={manager} />);
+    expect(screen.getByTestId('tap-for-sound')).toBeTruthy();
+    const before = players.bgm_title.play.mock.calls.length;
+
+    // 触れた瞬間はブラウザが再生を認めないので、まだ鳴らさない
+    await fire('pointerdown');
+    await fire('touchstart');
+    expect(players.bgm_title.play.mock.calls.length).toBe(before);
+
+    // 指を離したら鳴らす
+    await fire('pointerup');
+    expect(players.bgm_title.play.mock.calls.length).toBe(before + 1);
+    expect(screen.queryByTestId('tap-for-sound')).toBeNull();
+
+    // 1 回目で鳴らなかったときのために、次のタップでも試す
+    await fire('touchend');
+    await fire('click');
+    expect(players.bgm_title.play.mock.calls.length).toBe(before + 3);
+  });
+
+  it('BGM をオフにしているときは案内を出さない', async () => {
+    await AsyncStorage.setItem(
+      'caramel-just-meet/sound-settings/v1',
+      JSON.stringify({ ...DEFAULT_SOUND_SETTINGS, bgmEnabled: false }),
+    );
+    const { manager } = fakeManager();
+    await render(<App rankingRepository={new MockRankingRepository()} soundManager={manager} />);
+    await waitFor(() => expect(manager.getSettings().bgmEnabled).toBe(false));
+    expect(screen.queryByTestId('tap-for-sound')).toBeNull();
+  });
+
+  it('ゲームオーバーで止めた BGM は、タップしても鳴らし直さない', () => {
+    const { manager, players } = fakeManager();
+    manager.load();
+    manager.playBgm('bgm_game');
+    manager.stopBgm();
+    const calls = players.bgm_game.play.mock.calls.length;
+    manager.unlock();
+    manager.unlock();
+    expect(players.bgm_game.play.mock.calls.length).toBe(calls);
   });
 });
