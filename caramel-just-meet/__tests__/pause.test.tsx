@@ -160,16 +160,22 @@ describe('プレイ中の一時停止', () => {
     expect(onTitle).toHaveBeenCalled();
   });
 
-  it('アプリが裏に回ると自動で一時停止する', async () => {
-    let handler: ((s: AppStateStatus) => void) | null = null;
+  it('アプリが裏に回ると自動で一時停止し、表に戻っても一時停止のまま BGM は鳴らさない', async () => {
+    // 音の管理（SoundProvider）とゲーム画面の両方が見張っているので、全員に知らせる
+    const handlers: ((s: AppStateStatus) => void)[] = [];
     const spy = jest.spyOn(AppState, 'addEventListener').mockImplementation((_type, h) => {
-      handler = h as (s: AppStateStatus) => void;
+      handlers.push(h as (s: AppStateStatus) => void);
       return { remove: jest.fn() } as unknown as ReturnType<typeof AppState.addEventListener>;
     });
-    await setup();
+    const { players } = await setup();
     expect(screen.queryByTestId('pause-menu')).toBeNull();
-    await act(async () => handler?.('background'));
+    await act(async () => handlers.forEach((h) => h('background')));
     expect(screen.getByTestId('pause-menu')).toBeTruthy();
+    expect(players.bgm_game.pause).toHaveBeenCalled();
+    const plays = players.bgm_game.play.mock.calls.length;
+    await act(async () => handlers.forEach((h) => h('active')));
+    expect(screen.getByTestId('pause-menu')).toBeTruthy();
+    expect(players.bgm_game.play.mock.calls.length).toBe(plays);
     spy.mockRestore();
   });
 });

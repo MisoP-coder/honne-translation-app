@@ -199,6 +199,40 @@ describe('SoundManager', () => {
     expect(players.bgm_title.play).toHaveBeenCalledTimes(2);
   });
 
+  it('裏に回ると BGM と効果音を止め、表に戻ると BGM を続きから流す', () => {
+    const { manager, players } = fakeManager();
+    manager.load();
+    manager.playBgm('bgm_title');
+    manager.playSe('se_drop');
+    manager.enterBackground();
+    expect(players.bgm_title.pause).toHaveBeenCalled();
+    expect(players.se_drop.pause).toHaveBeenCalled();
+    expect(manager.bgm).toBeNull();
+    const seeks = players.bgm_title.seekTo.mock.calls.length;
+    // 裏にいる間は、画面の切り替えやタップがあっても鳴らさない
+    manager.unlock();
+    manager.playSe('se_drop');
+    expect(players.bgm_title.play).toHaveBeenCalledTimes(1);
+    expect(players.se_drop.play).toHaveBeenCalledTimes(1);
+    manager.enterForeground();
+    expect(players.bgm_title.play).toHaveBeenCalledTimes(2);
+    // 頭に戻さず続きから
+    expect(players.bgm_title.seekTo.mock.calls.length).toBe(seeks);
+    expect(manager.bgm).toBe('bgm_title');
+  });
+
+  it('裏にいる間に画面が変わったら、表に戻ったときは新しい画面の BGM を頭から流す', () => {
+    const { manager, players } = fakeManager();
+    manager.load();
+    manager.playBgm('bgm_game');
+    manager.enterBackground();
+    manager.playBgm('bgm_title');
+    expect(players.bgm_title.play).not.toHaveBeenCalled();
+    manager.enterForeground();
+    expect(players.bgm_title.play).toHaveBeenCalledTimes(1);
+    expect(players.bgm_game.play).toHaveBeenCalledTimes(1);
+  });
+
   it('プレイヤーが壊れていてもゲームは止まらない', () => {
     const manager = new SoundManager(() => {
       throw new Error('load failed');
@@ -378,6 +412,27 @@ describe('ブラウザで最初のタップから BGM を鳴らす', () => {
     await render(<App rankingRepository={new MockRankingRepository()} soundManager={manager} />);
     await waitFor(() => expect(manager.getSettings().bgmEnabled).toBe(false));
     expect(screen.queryByTestId('tap-for-sound')).toBeNull();
+  });
+
+  it('別のタブに移ったりブラウザを閉じたりすると BGM を止め、戻ると続きから流す', async () => {
+    let state: 'visible' | 'hidden' = 'visible';
+    Object.defineProperty(doc, 'visibilityState', { configurable: true, get: () => state });
+    const { manager, players } = fakeManager();
+    await render(<App rankingRepository={new MockRankingRepository()} soundManager={manager} />);
+    await fire('pointerup');
+    expect(manager.bgm).toBe('bgm_title');
+    state = 'hidden';
+    await fire('visibilitychange');
+    expect(players.bgm_title.pause).toHaveBeenCalled();
+    expect(manager.bgm).toBeNull();
+    // 裏にいる間のイベントでは鳴らさない
+    const plays = players.bgm_title.play.mock.calls.length;
+    await fire('click');
+    expect(players.bgm_title.play.mock.calls.length).toBe(plays);
+    state = 'visible';
+    await fire('visibilitychange');
+    expect(players.bgm_title.play.mock.calls.length).toBe(plays + 1);
+    expect(manager.bgm).toBe('bgm_title');
   });
 
   it('ゲームオーバーで止めた BGM は、タップしても鳴らし直さない', () => {

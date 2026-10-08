@@ -1,5 +1,5 @@
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 import { loadSoundSettings, saveSoundSettings, type SoundSettings } from './settings';
 import { SoundManager } from './SoundManager';
@@ -68,9 +68,33 @@ export function SoundProvider({ children, manager: injected }: Props) {
         for (const type of AUDIO_UNLOCK_EVENTS) doc.removeEventListener(type, unlock, true);
       };
     }
+    // 別のアプリ・別のタブに移ったり画面を消したりしたら音を止め、戻ったら続きから流す
+    let removeBackground = () => {};
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const doc = document;
+      const sync = () => (doc.visibilityState === 'hidden' ? manager.enterBackground() : manager.enterForeground());
+      const hide = () => manager.enterBackground();
+      doc.addEventListener('visibilitychange', sync);
+      // iPhone の Safari は、タブを閉じたり履歴を移動したりしたときに visibilitychange が来ないことがある
+      const win = typeof window !== 'undefined' && typeof window.addEventListener === 'function' ? window : null;
+      win?.addEventListener('pagehide', hide);
+      win?.addEventListener('pageshow', sync);
+      if (doc.visibilityState === 'hidden') manager.enterBackground();
+      removeBackground = () => {
+        doc.removeEventListener('visibilitychange', sync);
+        win?.removeEventListener('pagehide', hide);
+        win?.removeEventListener('pageshow', sync);
+      };
+    } else {
+      const sub = AppState.addEventListener('change', (state) =>
+        state === 'active' ? manager.enterForeground() : manager.enterBackground(),
+      );
+      removeBackground = () => sub.remove();
+    }
     return () => {
       alive = false;
       removeUnlock();
+      removeBackground();
       manager.dispose();
     };
   }, [manager]);

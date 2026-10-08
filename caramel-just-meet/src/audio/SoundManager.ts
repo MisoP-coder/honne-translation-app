@@ -33,6 +33,9 @@ export class SoundManager {
   /** 一時停止中（BGM を途中で止めていて、再開すると続きから流れる） */
   private suspended = false;
   private suspendedBgm: BgmName | null = null;
+  /** アプリやブラウザのタブが裏に回っている（ユーザーの一時停止とは別に管理する） */
+  private backgrounded = false;
+  private backgroundedBgm: BgmName | null = null;
 
   constructor(
     private readonly create: CreatePlayer = (source) => createAudioPlayer(source),
@@ -79,7 +82,7 @@ export class SoundManager {
 
   /** 効果音を頭から鳴らす（同じ音が鳴っている途中でも頭から鳴らし直す） */
   playSe(name: SoundName): void {
-    if (!this.seAudible()) return;
+    if (this.backgrounded || !this.seAudible()) return;
     const player = this.players.get(name);
     if (!player) return;
     try {
@@ -97,7 +100,7 @@ export class SoundManager {
   /** BGM を切り替える。同じ曲が鳴っていればそのまま */
   playBgm(name: BgmName): void {
     this.wantedBgm = name;
-    if (this.suspended || !this.bgmAudible()) return;
+    if (this.suspended || this.backgrounded || !this.bgmAudible()) return;
     if (this.currentBgm === name) return;
     this.pauseBgm();
     const player = this.players.get(name);
@@ -139,6 +142,11 @@ export class SoundManager {
     this.suspended = false;
     const resumeFrom = this.suspendedBgm;
     this.suspendedBgm = null;
+    if (this.backgrounded) {
+      // 裏に回っている間は鳴らさない。表に戻ったときに続きから流す
+      if (resumeFrom === this.wantedBgm) this.backgroundedBgm = resumeFrom;
+      return;
+    }
     if (!this.wantedBgm || !this.bgmAudible()) return;
     if (resumeFrom === this.wantedBgm) {
       try {
@@ -159,11 +167,48 @@ export class SoundManager {
   }
 
   /**
+   * アプリやタブが裏に回った（別のアプリ・別のタブ・画面ロックなど）。
+   * BGM はその場で止め、鳴っている途中の効果音も止める。
+   */
+  enterBackground(): void {
+    if (this.backgrounded) return;
+    this.backgrounded = true;
+    this.backgroundedBgm = this.currentBgm;
+    for (const player of this.players.values()) {
+      try {
+        player.pause();
+      } catch {
+        // 無視
+      }
+    }
+    this.currentBgm = null;
+  }
+
+  /** 表に戻った：裏に回る前に流れていた BGM を続きから流す（一時停止中ならそのまま） */
+  enterForeground(): void {
+    if (!this.backgrounded) return;
+    this.backgrounded = false;
+    const resumeFrom = this.backgroundedBgm;
+    this.backgroundedBgm = null;
+    if (this.suspended || !this.wantedBgm || !this.bgmAudible()) return;
+    if (resumeFrom === this.wantedBgm) {
+      try {
+        this.players.get(resumeFrom)?.play();
+        this.currentBgm = resumeFrom;
+      } catch {
+        this.currentBgm = null;
+      }
+    } else {
+      this.playBgm(this.wantedBgm);
+    }
+  }
+
+  /**
    * ブラウザは、ユーザーが画面に触れるまで音を鳴らさせてくれない。
    * 最初のタップで呼んで、止められていた BGM を鳴らし直す。
    */
   unlock(): void {
-    if (this.suspended || !this.bgmAudible() || !this.wantedBgm) return;
+    if (this.suspended || this.backgrounded || !this.bgmAudible() || !this.wantedBgm) return;
     const player = this.players.get(this.wantedBgm);
     // タップのたびに呼ばれる。鳴っている最中の play() は何も起きないので、そのまま呼んでよい
     // （expo-audio の playing はブラウザに再生を断られても true になるので、判定には使えない）
@@ -201,7 +246,8 @@ export class SoundManager {
       this.pauseBgm();
       // 一時停止中に BGM をオフにしたら、再開しても続きからは流さない
       this.suspendedBgm = null;
-    } else if (!this.suspended && this.wantedBgm && this.currentBgm !== this.wantedBgm) {
+      this.backgroundedBgm = null;
+    } else if (!this.suspended && !this.backgrounded && this.wantedBgm && this.currentBgm !== this.wantedBgm) {
       this.playBgm(this.wantedBgm);
     }
     return this.settings;
