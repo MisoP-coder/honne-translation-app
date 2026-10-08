@@ -17,6 +17,7 @@ import { GameButton } from '../components/GameButton';
 import { OutlinedText } from '../components/OutlinedText';
 import { PuddingArt } from '../components/PuddingArt';
 import { SoundSettingsPanel } from '../components/SoundSettingsPanel';
+import { TitleBackdrop } from '../components/TitleBackdrop';
 import { titleFor } from '../game/titles';
 import type { HighScore } from '../storage/highScore';
 import { colors } from '../theme/colors';
@@ -34,6 +35,9 @@ interface Props {
 
 export function TitleScreen({ highScore, onStart, onRanking }: Props) {
   const wobble = useRef(new Animated.Value(0)).current;
+  // タイトルとスタートボタンを、どくん…どくん…と脈打たせる
+  const pulse = useRef(new Animated.Value(0)).current;
+  const [size, setSize] = useState({ width: 0, height: 0 });
   const sound = useSound();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const s = sound?.settings;
@@ -56,11 +60,28 @@ export function TitleScreen({ highScore, onStart, onRanking }: Props) {
     return () => loop.stop();
   }, [wobble]);
 
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 450, easing: Easing.out(Easing.quad), useNativeDriver: USE_NATIVE_DRIVER }),
+        Animated.timing(pulse, { toValue: 0, duration: 650, easing: Easing.inOut(Easing.quad), useNativeDriver: USE_NATIVE_DRIVER }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+
   const translateX = wobble.interpolate({ inputRange: [-1, 1], outputRange: [-8, 8] });
   const skewX = wobble.interpolate({ inputRange: [-1, 1], outputRange: ['6deg', '-6deg'] });
+  const titleScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.05] });
+  const startScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.07] });
 
   return (
-    <View style={styles.root}>
+    <View
+      style={styles.root}
+      onLayout={(e) => setSize({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
+    >
+      <TitleBackdrop width={size.width} height={size.height} centerYRatio={compact ? 0.45 : 0.47} />
       {/* サウンドボタンは上の段に置き、タイトルと重ならないようにする */}
       <View style={styles.topBar}>
         {sound && (
@@ -82,26 +103,34 @@ export function TitleScreen({ highScore, onStart, onRanking }: Props) {
         style={styles.scroll}
         contentContainerStyle={[styles.content, compact && styles.contentCompact]}
       >
-        <OutlinedText fill="#E8572A" shadow="#5A1A00" outlineWidth={2} depth={3} style={compact ? styles.kickerCompact : styles.kicker}>
-          極限！
-        </OutlinedText>
-        <OutlinedText fill="#FFE600" shadow="#D0002A" outlineWidth={3} depth={5} style={compact ? styles.titleCompact : styles.title}>
-          カラメル・{'\n'}ジャスト・ミート
-        </OutlinedText>
+        {/* 「極限！」は傾けた赤いリボンに */}
+        <View style={styles.kickerRibbon}>
+          <OutlinedText fill="#FFFFFF" shadow="#5A1A00" outlineWidth={2} depth={3} style={compact ? styles.kickerCompact : styles.kicker}>
+            極限！
+          </OutlinedText>
+        </View>
+        <Animated.View style={{ transform: [{ scale: titleScale }] }}>
+          <OutlinedText fill="#FFE600" shadow="#D0002A" outlineWidth={3} depth={5} style={compact ? styles.titleCompact : styles.title}>
+            カラメル・{'\n'}ジャスト・ミート
+          </OutlinedText>
+        </Animated.View>
 
         <View style={[styles.pudding, compact && styles.puddingCompact]}>
           <PuddingArt
-            topHalf={compact ? 46 : 58}
-            bottomHalf={compact ? 59 : 74}
-            height={compact ? 54 : 70}
+            topHalf={compact ? 50 : 66}
+            bottomHalf={compact ? 64 : 84}
+            height={compact ? 58 : 78}
             caramelCount={6}
             bodyStyle={{ transform: [{ translateX }, { skewX }] }}
           />
         </View>
 
-        <Text style={[styles.howto, compact && styles.howtoCompact]}>
-          ぷるぷる揺れるプリンの頂点に{'\n'}タップでカラメルを落とせ！{'\n'}ズレたら即ゲームオーバー
-        </Text>
+        <View style={[styles.howtoCard, compact && styles.howtoCardCompact]}>
+          <Text style={[styles.howto, compact && styles.howtoCompact]}>
+            ぷるぷる揺れるプリンの頂点に{'\n'}タップでカラメルを落とせ！{'\n'}
+            <Text style={styles.howtoStrong}>ズレたら即ゲームオーバー</Text>
+          </Text>
+        </View>
 
         <View style={[styles.best, compact && styles.bestCompact]}>
           <Text style={styles.bestText} testID="title-best">
@@ -120,7 +149,9 @@ export function TitleScreen({ highScore, onStart, onRanking }: Props) {
         )}
 
         <View style={[styles.buttons, compact && styles.buttonsCompact]}>
-          <GameButton testID="start" label="スタート" onPress={onStart} />
+          <Animated.View style={{ transform: [{ scale: startScale }] }}>
+            <GameButton testID="start" label="スタート" size="large" onPress={onStart} />
+          </Animated.View>
           <GameButton testID="open-ranking" label="世界ランキング" variant="secondary" onPress={onRanking} />
         </View>
       </ScrollView>
@@ -130,7 +161,7 @@ export function TitleScreen({ highScore, onStart, onRanking }: Props) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.background },
+  root: { flex: 1, backgroundColor: '#F07A22', overflow: 'hidden' },
   topBar: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
@@ -148,6 +179,17 @@ const styles = StyleSheet.create({
   },
   contentCompact: { paddingBottom: 12 },
   // 文字や部品は縮めない（収まらなければスクロールする）
+  kickerRibbon: {
+    flexShrink: 0,
+    backgroundColor: '#D0002A',
+    paddingHorizontal: 18,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#FFE600',
+    transform: [{ rotate: '-6deg' }],
+    marginBottom: 6,
+  },
   kicker: { flexShrink: 0, fontSize: 24, fontWeight: '900', fontStyle: 'italic', letterSpacing: 4, textAlign: 'center' },
   kickerCompact: { flexShrink: 0, fontSize: 20, fontWeight: '900', fontStyle: 'italic', letterSpacing: 4, textAlign: 'center' },
   title: {
@@ -175,15 +217,35 @@ const styles = StyleSheet.create({
     borderColor: colors.caramel,
   },
   soundToggleText: { fontSize: 13, fontWeight: '800', color: colors.caramel },
-  pudding: { flexShrink: 0, marginTop: 20, marginBottom: 14, alignItems: 'center' },
-  puddingCompact: { marginTop: 8, marginBottom: 6 },
-  howto: { flexShrink: 0, fontSize: 15, lineHeight: 22, color: colors.text, textAlign: 'center', fontWeight: '600' },
+  pudding: { flexShrink: 0, marginTop: 18, marginBottom: 12, alignItems: 'center' },
+  puddingCompact: { marginTop: 6, marginBottom: 4 },
+  // 背景がにぎやかなので、説明は白いカードに載せて読みやすくする
+  howtoCard: {
+    flexShrink: 0,
+    backgroundColor: 'rgba(255,255,255,0.94)',
+    borderRadius: 18,
+    borderWidth: 3,
+    borderColor: colors.caramel,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+  },
+  howtoCardCompact: { paddingVertical: 6 },
+  howto: { fontSize: 15, lineHeight: 22, color: colors.text, textAlign: 'center', fontWeight: '700' },
   howtoCompact: { fontSize: 14, lineHeight: 20 },
-  best: { flexShrink: 0, marginTop: 16, alignItems: 'center' },
+  howtoStrong: { color: colors.accent, fontWeight: '900' },
+  best: {
+    flexShrink: 0,
+    marginTop: 12,
+    alignItems: 'center',
+    backgroundColor: 'rgba(90,30,0,0.82)',
+    borderRadius: 999,
+    paddingVertical: 6,
+    paddingHorizontal: 18,
+  },
   bestCompact: { marginTop: 8 },
-  bestText: { fontSize: 14, color: colors.textSub, fontWeight: '700' },
-  bestTitle: { fontSize: 13, color: colors.textSub, marginTop: 2 },
-  buttons: { flexShrink: 0, marginTop: 24, gap: 12 },
+  bestText: { fontSize: 14, color: '#FFE600', fontWeight: '900' },
+  bestTitle: { fontSize: 12, color: '#FFFFFF', marginTop: 1, fontWeight: '700' },
+  buttons: { flexShrink: 0, marginTop: 20, gap: 14, alignItems: 'center' },
   buttonsCompact: { marginTop: 14, gap: 10 },
   tapHint: {
     flexShrink: 0,

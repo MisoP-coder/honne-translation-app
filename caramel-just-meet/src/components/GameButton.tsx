@@ -6,6 +6,8 @@ interface Props {
   label: string;
   onPress: () => void;
   variant?: 'primary' | 'secondary' | 'x';
+  /** large：タイトル画面の「スタート」用の大きく目立つボタン */
+  size?: 'normal' | 'large';
   style?: ViewStyle;
   testID?: string;
   /**
@@ -15,7 +17,7 @@ interface Props {
   href?: string;
 }
 
-export function GameButton({ label, onPress, variant = 'primary', style, testID, href }: Props) {
+export function GameButton({ label, onPress, variant = 'primary', size = 'normal', style, testID, href }: Props) {
   const asLink = Platform.OS === 'web' && href !== undefined;
   // href / hrefAttrs は react-native-web だけが解釈する（型定義にはない）
   const linkProps = asLink ? { href, hrefAttrs: { target: '_blank', rel: 'noopener noreferrer' } } : {};
@@ -29,11 +31,14 @@ export function GameButton({ label, onPress, variant = 'primary', style, testID,
       style={({ pressed }) => [
         styles.base,
         styles[variant],
+        size === 'large' && styles.large,
         pressed && styles.pressed,
         style,
       ]}
     >
-      <Text style={[styles.label, variant === 'secondary' && styles.labelSecondary]}>{label}</Text>
+      <Text style={[styles.label, variant === 'secondary' && styles.labelSecondary, size === 'large' && styles.labelLarge]}>
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -49,7 +54,17 @@ const styles = StyleSheet.create({
   primary: { backgroundColor: colors.accent },
   secondary: { backgroundColor: colors.card, borderWidth: 2, borderColor: colors.caramel },
   x: { backgroundColor: colors.x },
+  // 下側を濃くして、押したくなる立体的なボタンにする
+  large: {
+    minWidth: 250,
+    paddingVertical: 16,
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 7,
+    borderBottomColor: '#A8300E',
+  },
   pressed: { opacity: 0.75, transform: [{ scale: 0.97 }] },
   label: { color: '#FFFFFF', fontSize: 17, fontWeight: '800' },
   labelSecondary: { color: colors.caramel },
+  labelLarge: { fontSize: 24, fontWeight: '900', letterSpacing: 4 },
 });
