@@ -1,7 +1,10 @@
 import { useEffect, useRef } from 'react';
-import { Animated, Easing, Platform, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+
+import { useBgm, useSound } from '../audio/SoundContext';
 
 import { GameButton } from '../components/GameButton';
+import { OutlinedText } from '../components/OutlinedText';
 import { PuddingArt } from '../components/PuddingArt';
 import { titleFor } from '../game/titles';
 import type { HighScore } from '../storage/highScore';
@@ -17,6 +20,9 @@ interface Props {
 
 export function TitleScreen({ highScore, onStart, onRanking }: Props) {
   const wobble = useRef(new Animated.Value(0)).current;
+  const sound = useSound();
+  // 起動したら無駄に壮大な「運命」が流れる
+  useBgm('bgm_title');
 
   useEffect(() => {
     const loop = Animated.loop(
@@ -35,8 +41,24 @@ export function TitleScreen({ highScore, onStart, onRanking }: Props) {
 
   return (
     <View style={styles.root}>
-      <Text style={styles.kicker}>極限！</Text>
-      <Text style={styles.title}>カラメル・{'\n'}ジャスト・ミート</Text>
+      {sound && (
+        <Pressable
+          testID="sound-toggle"
+          accessibilityRole="switch"
+          accessibilityState={{ checked: !sound.muted }}
+          accessibilityLabel="サウンド"
+          onPress={() => sound.setMuted(!sound.muted)}
+          style={styles.soundToggle}
+        >
+          <Text style={styles.soundToggleText}>{sound.muted ? '🔇 音なし' : '🔊 音あり'}</Text>
+        </Pressable>
+      )}
+      <OutlinedText fill="#E8572A" shadow="#5A1A00" outlineWidth={2} depth={3} style={styles.kicker}>
+        極限！
+      </OutlinedText>
+      <OutlinedText fill="#FFE600" shadow="#D0002A" outlineWidth={3} depth={5} style={styles.title}>
+        カラメル・{'\n'}ジャスト・ミート
+      </OutlinedText>
 
       <View style={styles.pudding}>
         <PuddingArt
@@ -77,14 +99,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 24,
   },
-  kicker: { fontSize: 22, fontWeight: '900', color: colors.accent, letterSpacing: 4 },
+  kicker: { fontSize: 24, fontWeight: '900', fontStyle: 'italic', letterSpacing: 4, textAlign: 'center' },
   title: {
-    fontSize: 34,
-    lineHeight: 42,
+    fontSize: 36,
+    lineHeight: 46,
     fontWeight: '900',
-    color: colors.caramel,
+    fontStyle: 'italic',
     textAlign: 'center',
   },
+  soundToggle: {
+    position: 'absolute',
+    top: 12,
+    right: 16,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: colors.card,
+    borderWidth: 2,
+    borderColor: colors.caramel,
+  },
+  soundToggleText: { fontSize: 13, fontWeight: '800', color: colors.caramel },
   pudding: { marginTop: 20, marginBottom: 14, alignItems: 'center' },
   howto: { fontSize: 15, lineHeight: 22, color: colors.text, textAlign: 'center', fontWeight: '600' },
   best: { marginTop: 16, alignItems: 'center' },

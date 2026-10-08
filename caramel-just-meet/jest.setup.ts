@@ -7,3 +7,16 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 jest.mock('react-native-safe-area-context', () =>
   require('react-native-safe-area-context/jest/mock').default,
 );
+
+// expo-audio はネイティブの音声機能なので、テストでは鳴らさずに呼び出しだけ記録する
+jest.mock('expo-audio', () => ({
+  createAudioPlayer: jest.fn(() => ({
+    play: jest.fn(),
+    pause: jest.fn(),
+    seekTo: jest.fn(() => Promise.resolve()),
+    remove: jest.fn(),
+    loop: false,
+    volume: 1,
+  })),
+  setAudioModeAsync: jest.fn(() => Promise.resolve()),
+}));

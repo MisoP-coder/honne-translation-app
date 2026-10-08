@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
 
+import { useBgm } from '../audio/SoundContext';
 import { GameButton } from '../components/GameButton';
 import { rankWithMe } from '../ranking/mockRanking';
 import type { MyRecord, RankedEntry, RankingEntry, RankingRepository } from '../ranking/types';
@@ -18,6 +19,7 @@ interface Props {
 const MEDALS = ['🥇', '🥈', '🥉'];
 
 export function RankingScreen({ repository, myRecord, onBack }: Props) {
+  useBgm('bgm_title');
   const [top, setTop] = useState<RankingEntry[] | null>(null);
   const [error, setError] = useState(false);
 

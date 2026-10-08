@@ -8,6 +8,8 @@ import {
   View,
 } from 'react-native';
 
+import { useBgm, useSound } from '../audio/SoundContext';
+import { landingSounds } from '../audio/sounds';
 import { Backdrop } from '../components/Backdrop';
 import { CaramelDrop } from '../components/CaramelDrop';
 import { ComboPopup } from '../components/ComboPopup';
@@ -103,6 +105,10 @@ export function GameScreen({ bestScore, onGameOver, onRanking, onTitle, seed }: 
   const flash = useRef(new Animated.Value(0)).current;
   const [flashColor, setFlashColor] = useState('#FFFFFF');
   const reported = useRef(false);
+  const sound = useSound();
+  const soundRef = useRef(sound);
+  soundRef.current = sound;
+  useBgm('bgm_game');
 
   const update = useCallback((next: GameState) => {
     gameRef.current = next;
@@ -132,6 +138,9 @@ export function GameScreen({ bestScore, onGameOver, onRanking, onTitle, seed }: 
       let fx = particlesRef.current;
       const judge = next.lastJudge;
       if (judge && judge.id !== prev.lastJudge?.id) {
+        // 着地した瞬間に音を鳴らす。ミスなら BGM をピタッと止めて「カッ…カーン、チーン…」
+        if (judge.judge === 'miss') soundRef.current?.manager.stopBgm();
+        soundRef.current?.manager.playSes(landingSounds(judge.judge, judge.combo));
         if (judge.judge === 'miss') {
           fx = clearParticles(fx);
         } else {
@@ -184,11 +193,16 @@ export function GameScreen({ bestScore, onGameOver, onRanking, onTitle, seed }: 
   const onTap = () => {
     if (!config) return;
     const next = tapDrop(gameRef.current, config);
-    if (next !== gameRef.current) update(next);
+    if (next !== gameRef.current) {
+      // 投下の「ヒュゥゥン」
+      sound?.manager.playSe('se_drop');
+      update(next);
+    }
   };
 
   const retry = () => {
     reported.current = false;
+    sound?.manager.playBgm('bgm_game');
     setIsNewRecord(false);
     setParticleSystem(clearParticles(particlesRef.current));
     shakeX.setValue(0);

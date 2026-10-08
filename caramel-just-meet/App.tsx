@@ -3,6 +3,8 @@ import { useCallback, useMemo, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
+import { SoundProvider } from './src/audio/SoundContext';
+import type { SoundManager } from './src/audio/SoundManager';
 import { useHighScore } from './src/hooks/useHighScore';
 import { MockRankingRepository } from './src/ranking/mockRanking';
 import type { RankingRepository } from './src/ranking/types';
@@ -18,9 +20,11 @@ export const PLAYER_NAME = 'あなた';
 interface Props {
   /** Supabase などに繋ぐときはここに本物の実装を渡す */
   rankingRepository?: RankingRepository;
+  /** テスト用：音の管理を差し替える */
+  soundManager?: SoundManager;
 }
 
-export default function App({ rankingRepository }: Props) {
+export default function App({ rankingRepository, soundManager }: Props) {
   const [screen, setScreen] = useState<Screen>('title');
   const [gameKey, setGameKey] = useState(0);
   const { highScore, submit } = useHighScore();
@@ -51,34 +55,36 @@ export default function App({ rankingRepository }: Props) {
       : null;
 
   return (
-    <SafeAreaProvider>
-      <SafeAreaView style={styles.root}>
-        <StatusBar style="dark" />
-        {screen === 'title' && (
-          <TitleScreen
-            highScore={highScore}
-            onStart={startGame}
-            onRanking={() => setScreen('ranking')}
-          />
-        )}
-        {screen === 'game' && (
-          <GameScreen
-            key={gameKey}
-            bestScore={highScore.bestScore}
-            onGameOver={onGameOver}
-            onRanking={() => setScreen('ranking')}
-            onTitle={() => setScreen('title')}
-          />
-        )}
-        {screen === 'ranking' && (
-          <RankingScreen
-            repository={repository}
-            myRecord={myRecord}
-            onBack={() => setScreen('title')}
-          />
-        )}
-      </SafeAreaView>
-    </SafeAreaProvider>
+    <SoundProvider manager={soundManager}>
+      <SafeAreaProvider>
+        <SafeAreaView style={styles.root}>
+          <StatusBar style="dark" />
+          {screen === 'title' && (
+            <TitleScreen
+              highScore={highScore}
+              onStart={startGame}
+              onRanking={() => setScreen('ranking')}
+            />
+          )}
+          {screen === 'game' && (
+            <GameScreen
+              key={gameKey}
+              bestScore={highScore.bestScore}
+              onGameOver={onGameOver}
+              onRanking={() => setScreen('ranking')}
+              onTitle={() => setScreen('title')}
+            />
+          )}
+          {screen === 'ranking' && (
+            <RankingScreen
+              repository={repository}
+              myRecord={myRecord}
+              onBack={() => setScreen('title')}
+            />
+          )}
+        </SafeAreaView>
+      </SafeAreaProvider>
+    </SoundProvider>
   );
 }
 

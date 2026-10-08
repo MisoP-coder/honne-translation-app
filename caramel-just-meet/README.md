@@ -19,6 +19,11 @@ npm test           # テスト（Jest）
 npm run typecheck  # 型チェック
 ```
 
+## BGM と効果音
+
+`assets/sounds/` の音はすべて `scripts/generate_sounds.py` で合成した自作の音源です（外部の音源は使っていません）。
+作り直すときは `python3 scripts/generate_sounds.py`（numpy が必要）。
+
 ## ランキングを本物にするには
 
 `src/ranking/types.ts` の `RankingRepository` を実装して `App` の `rankingRepository` に渡す。
