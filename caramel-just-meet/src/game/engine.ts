@@ -104,8 +104,9 @@ function clamp(v: number, min: number, max: number) {
 
 export function createConfig(width: number, height: number): GameConfig {
   const puddingTopHalfWidth = clamp(width * 0.13, 36, 70);
-  const puddingBottomHalfWidth = puddingTopHalfWidth * 1.45;
-  const puddingHeight = puddingTopHalfWidth * 1.5;
+  // 平たくて背の低いプリン（頂上の幅＝判定の幅はそのまま）
+  const puddingBottomHalfWidth = puddingTopHalfWidth * 1.28;
+  const puddingHeight = puddingTopHalfWidth * 1.2;
   const plateY = height * 0.78;
   const puddingTopY = plateY - puddingHeight;
   const dropStartY = height * 0.16;

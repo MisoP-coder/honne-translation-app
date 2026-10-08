@@ -40,9 +40,9 @@ export function TitleScreen({ highScore, onStart, onRanking }: Props) {
 
       <View style={styles.pudding}>
         <PuddingArt
-          topHalf={46}
-          bottomHalf={66}
-          height={78}
+          topHalf={58}
+          bottomHalf={74}
+          height={70}
           caramelCount={6}
           bodyStyle={{ transform: [{ translateX }, { skewX }] }}
         />
