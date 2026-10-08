@@ -41,7 +41,8 @@ describe('createConfig', () => {
       const c = createConfig(w, 800);
       expect(c.width / 2 - c.amplitude - c.puddingBottomHalfWidth).toBeGreaterThan(0);
       expect(c.perfectRange).toBeLessThan(c.goodRange);
-      expect(c.goodRange).toBeLessThan(c.puddingTopHalfWidth);
+      // セーフの範囲は見えているプリンの頂上と同じ（見た目より狭くしない）
+      expect(c.goodRange).toBe(c.puddingTopHalfWidth);
       expect(c.dropStartY).toBeLessThan(c.puddingTopY);
     }
   });
