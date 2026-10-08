@@ -190,6 +190,28 @@ export function pointsFor(judge: Judge, comboBefore: number): number {
   return POINTS[judge] + comboBefore * COMBO_BONUS;
 }
 
+/**
+ * 連続 combo 回のゲームで取りうるスコアか。
+ * 1 回の成功で「JUST MEET 300 / GOOD 100 ＋ それまでの連続数 × 10」点なので、
+ * スコア = 100n + 200p + 5n(n-1)（p は JUST MEET の回数）になる。
+ * サーバー（supabase/schema.sql の caramel_is_valid_score）と同じ式。
+ */
+export function isPossibleScore(score: number, combo: number): boolean {
+  if (!Number.isInteger(score) || !Number.isInteger(combo) || combo < 1) return false;
+  const base = POINTS.good * combo + (COMBO_BONUS * combo * (combo - 1)) / 2;
+  const step = POINTS.perfect - POINTS.good;
+  const extra = score - base;
+  return extra >= 0 && extra <= step * combo && extra % step === 0;
+}
+
+/** そのスコアを出せる連続数（maxCombo 以下でいちばん大きいもの）。なければ 0 */
+export function comboForScore(score: number, maxCombo: number): number {
+  for (let n = Math.floor(maxCombo); n >= 1; n--) {
+    if (isPossibleScore(score, n)) return n;
+  }
+  return 0;
+}
+
 export function puddingCenterX(state: GameState, config: GameConfig): number {
   return config.width / 2 + state.puddingOffset;
 }

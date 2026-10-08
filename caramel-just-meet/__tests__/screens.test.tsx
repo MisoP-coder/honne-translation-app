@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { useState } from 'react';
 import { Linking } from 'react-native';
 
 import App from '../App';
@@ -7,6 +8,8 @@ import { DUMMY_RANKING, MockRankingRepository } from '../src/ranking/mockRanking
 import { GameScreen } from '../src/screens/GameScreen';
 import { RankingScreen } from '../src/screens/RankingScreen';
 import { saveHighScore } from '../src/storage/highScore';
+import type { PlayerProfile } from '../src/ranking/player';
+import { RankingError } from '../src/ranking/types';
 
 const LAYOUT = { nativeEvent: { layout: { x: 0, y: 0, width: 390, height: 700 } } };
 
@@ -38,21 +41,73 @@ describe('GameOverPanel', () => {
 });
 
 describe('RankingScreen', () => {
-  it('ダミーの上位プレイヤーと自分の順位を表示する', async () => {
+  const player: PlayerProfile = { playerId: 'secret', publicId: null, name: null, flag: '🇯🇵' };
+
+  it('サンプルのランキングでは「サンプル」と表示する', async () => {
     await render(
-      <RankingScreen
-        repository={new MockRankingRepository()}
-        myRecord={{ name: 'あなた', score: 12000, combo: 40 }}
-        onBack={jest.fn()}
-      />,
+      <RankingScreen repository={new MockRankingRepository()} best={null} player={player} onRegister={jest.fn()} onBack={jest.fn()} />,
     );
     expect(await screen.findByTestId('ranking-row-d01')).toBeTruthy();
     expect(screen.getByText('CaramelGod_JP')).toBeTruthy();
-    expect(screen.getByTestId('ranking-row-me')).toBeTruthy();
-    expect(screen.getByTestId('my-rank')).toHaveTextContent('あなたは世界 10 位！');
+    expect(screen.getByTestId('ranking-sample')).toBeTruthy();
+    expect(screen.getByTestId('my-rank')).toHaveTextContent(/まずはプレイして/);
   });
 
-  it('上位20位に入らなくても自分の行を下に表示する', async () => {
+  it('名前を入れて登録すると、自分の行と順位が出る', async () => {
+    const repo = new MockRankingRepository();
+    const onRegister = jest.fn();
+    // App と同じように、登録したら名前と公開 ID をプレイヤー情報に保存する
+    function Harness() {
+      const [current, setCurrent] = useState(player);
+      return (
+        <RankingScreen
+          repository={repo}
+          best={{ score: 930, combo: 3 }}
+          player={current}
+          onRegister={async (name) => {
+            onRegister(name);
+            const r = await repo.submit({ playerId: 'secret', name, flag: '🇯🇵', score: 930, combo: 3 });
+            setCurrent((c) => ({ ...c, name, publicId: r.publicId }));
+            return r;
+          }}
+          onBack={jest.fn()}
+        />
+      );
+    }
+    await render(<Harness />);
+    await screen.findByTestId('ranking-row-d01');
+    await fireEvent.changeText(screen.getByTestId('ranking-name-input'), '  プリン  太郎 ');
+    await fireEvent.press(screen.getByTestId('ranking-register'));
+    expect(onRegister).toHaveBeenCalledWith('プリン 太郎');
+    await waitFor(() => expect(screen.getByTestId('my-rank')).toHaveTextContent('プリン 太郎 は世界 20 位！'));
+    expect(screen.getByTestId('ranking-row-me')).toHaveTextContent(/プリン 太郎/);
+  });
+
+  it('名前が空・長すぎるときは登録せずに知らせる', async () => {
+    const onRegister = jest.fn();
+    await render(
+      <RankingScreen repository={new MockRankingRepository()} best={{ score: 300, combo: 1 }} player={player} onRegister={onRegister} onBack={jest.fn()} />,
+    );
+    await screen.findByTestId('ranking-row-d01');
+    await fireEvent.press(screen.getByTestId('ranking-register'));
+    expect(onRegister).not.toHaveBeenCalled();
+    expect(screen.getByTestId('ranking-register-error')).toHaveTextContent(/1〜12 文字/);
+  });
+
+  it('通信できないときは理由を表示する', async () => {
+    const onRegister = jest.fn(async () => {
+      throw new RankingError('network', 'offline');
+    });
+    await render(
+      <RankingScreen repository={new MockRankingRepository()} best={{ score: 300, combo: 1 }} player={player} onRegister={onRegister} onBack={jest.fn()} />,
+    );
+    await screen.findByTestId('ranking-row-d01');
+    await fireEvent.changeText(screen.getByTestId('ranking-name-input'), 'テスト');
+    await fireEvent.press(screen.getByTestId('ranking-register'));
+    await waitFor(() => expect(screen.getByTestId('ranking-register-error')).toHaveTextContent(/通信できませんでした/));
+  });
+
+  it('上位に入らない登録済みの自分は、順位付きで下に表示する', async () => {
     const many = Array.from({ length: 25 }, (_, i) => ({
       id: `x${i}`,
       name: `Player${i}`,
@@ -60,21 +115,19 @@ describe('RankingScreen', () => {
       score: 10000 - i * 100,
       combo: 50,
     }));
+    const repo = new MockRankingRepository(many);
+    const r = await repo.submit({ playerId: 'secret', name: 'わたし', flag: '🇯🇵', score: 300, combo: 1 });
     await render(
       <RankingScreen
-        repository={new MockRankingRepository(many)}
-        myRecord={{ name: 'あなた', score: 50, combo: 1 }}
+        repository={repo}
+        best={{ score: 300, combo: 1 }}
+        player={{ ...player, name: 'わたし', publicId: r.publicId }}
+        onRegister={jest.fn()}
         onBack={jest.fn()}
       />,
     );
-    expect(await screen.findByTestId('ranking-row-me')).toHaveTextContent(/21/);
-    expect(screen.queryByTestId('my-rank')).toBeNull();
-  });
-
-  it('未プレイなら案内を出す', async () => {
-    await render(<RankingScreen repository={new MockRankingRepository()} myRecord={null} onBack={jest.fn()} />);
-    expect(await screen.findByTestId('my-rank')).toHaveTextContent(/まだ記録がありません/);
-    expect(screen.queryByTestId('ranking-row-me')).toBeNull();
+    expect(await screen.findByTestId('ranking-row-me')).toHaveTextContent(/26/);
+    expect(screen.getByTestId('my-rank')).toHaveTextContent('わたし は世界 26 位！');
   });
 });
 
@@ -113,16 +166,22 @@ describe('GameScreen', () => {
 describe('App', () => {
   afterEach(() => jest.useRealTimers());
 
-  it('タイトル → ランキング → タイトル と移動でき、ハイスコアがランキングに載る', async () => {
-    await saveHighScore({ bestScore: 99999, bestCombo: 120 });
+  it('タイトル → ランキング（名前を登録）→ タイトル と移動できる', async () => {
+    await saveHighScore({ bestScore: 99990, bestCombo: 140, bestScoreCombo: 0 });
+    // 1 位になれる本当にありえる記録（120 連続すべて JUST MEET）
+    const top = 300 * 120 + 5 * 120 * 119;
+    await saveHighScore({ bestScore: top, bestCombo: 140, bestScoreCombo: 120 });
     await render(<App rankingRepository={new MockRankingRepository(DUMMY_RANKING)} />);
     await waitFor(() =>
-      expect(screen.getByTestId('title-best')).toHaveTextContent('ハイスコア 99999 ／ 最高 120 連続'),
+      expect(screen.getByTestId('title-best')).toHaveTextContent(`ハイスコア ${top} ／ 最高 140 連続`),
     );
 
     await fireEvent.press(screen.getByTestId('open-ranking'));
-    expect(await screen.findByTestId('ranking-row-me')).toBeTruthy();
-    expect(screen.getByTestId('my-rank')).toHaveTextContent('あなたは世界 1 位！');
+    await screen.findByTestId('ranking-row-d01');
+    await fireEvent.changeText(screen.getByTestId('ranking-name-input'), 'チャンピオン');
+    await fireEvent.press(screen.getByTestId('ranking-register'));
+    await waitFor(() => expect(screen.getByTestId('my-rank')).toHaveTextContent('チャンピオン は世界 1 位！'));
+    expect(screen.getByTestId('ranking-row-me')).toBeTruthy();
 
     await fireEvent.press(screen.getByTestId('ranking-back'));
     expect(screen.getByTestId('start')).toBeTruthy();

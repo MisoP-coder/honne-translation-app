@@ -19,8 +19,9 @@ export function useHighScore() {
       // 読み込み中にプレイが終わっていた場合も記録を失わないようにマージする
       const { next } = mergeHighScore(loaded, {
         score: current.current.bestScore,
-        combo: current.current.bestCombo,
+        combo: current.current.bestScoreCombo,
       });
+      next.bestCombo = Math.max(next.bestCombo, current.current.bestCombo);
       current.current = next;
       setHighScore(next);
     });

@@ -20,3 +20,6 @@ jest.mock('expo-audio', () => ({
   })),
   setAudioModeAsync: jest.fn(() => Promise.resolve()),
 }));
+
+// expo-crypto の UUID はネイティブ機能なので、テストでは Node の crypto で作る
+jest.mock('expo-crypto', () => ({ randomUUID: () => require('crypto').randomUUID() }));

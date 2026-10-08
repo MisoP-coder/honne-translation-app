@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover" />
+    <title>極限！カラメル・ジャスト・ミート</title>
+    <meta name="description" content="ぷるぷる揺れるプリンの頂点に、タップでカラメルを落とせ！ズレたら即ゲームオーバーの、無駄に派手なワンタップゲーム。" />
+    <meta name="theme-color" content="#FFF6E3" />
+
+    <!-- シェアされたときのカード（X・LINE・Facebook など）。%SITE_URL% はビルド後に scripts/postbuild-web.mjs が置き換える -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="極限！カラメル・ジャスト・ミート" />
+    <meta property="og:title" content="極限！カラメル・ジャスト・ミート" />
+    <meta property="og:description" content="揺れるプリンの頂点に、カラメルを落とせ！何連続で乗せられる？" />
+    <meta property="og:url" content="%SITE_URL%/" />
+    <meta property="og:image" content="%SITE_URL%/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:locale" content="ja_JP" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="極限！カラメル・ジャスト・ミート" />
+    <meta name="twitter:description" content="揺れるプリンの頂点に、カラメルを落とせ！何連続で乗せられる？" />
+    <meta name="twitter:image" content="%SITE_URL%/og.png" />
+
+    <!-- ホーム画面に追加したときのアイコン -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="カラメル" />
+
+    <!-- react-native-web が推奨する初期スタイル -->
+    <style id="expo-reset">
+      html,
+      body {
+        height: 100%;
+        background-color: #fff6e3;
+      }
+      body {
+        overflow: hidden;
+        /* スマホで長押ししたときの文字選択・タップ時の青い枠を出さない（ゲーム中に邪魔なので） */
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+        overscroll-behavior: none;
+      }
+      #root {
+        display: flex;
+        height: 100%;
+        flex: 1;
+      }
+      input {
+        -webkit-user-select: text;
+        user-select: text;
+      }
+    </style>
+  </head>
+
+  <body>
+    <noscript>このゲームを遊ぶには JavaScript を有効にしてください。</noscript>
+    <div id="root"></div>
+  </body>
+</html>

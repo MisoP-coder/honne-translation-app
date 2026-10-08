@@ -1,4 +1,14 @@
-import type { MyRecord, RankedEntry, RankingEntry, RankingRepository } from './types';
+import { isPossibleScore } from '../game/engine';
+import { sanitizeName } from './player';
+import {
+  type MyRecord,
+  type PlayerRecord,
+  type RankedEntry,
+  type RankingEntry,
+  RankingError,
+  type RankingRepository,
+  type SubmitResult,
+} from './types';
 
 export const MY_ENTRY_ID = 'me';
 
@@ -61,9 +71,16 @@ export function rankWithMe(
   return { entries: ranked, myRank };
 }
 
-/** フロントエンドだけで動くモック。通信の待ち時間も再現できる */
+/** サンプルのランキングで、自分の記録に付ける公開 ID */
+export const SAMPLE_MY_PUBLIC_ID = 'sample-me';
+
+/**
+ * サーバーの設定がないときに使うサンプルのランキング（ダミーの 20 人）。
+ * 登録した記録はこの端末の中だけで並ぶ。画面には「サンプル」と表示する。
+ */
 export class MockRankingRepository implements RankingRepository {
-  private submitted: MyRecord | null = null;
+  readonly isSample = true;
+  private submitted: PlayerRecord | null = null;
 
   constructor(
     private readonly data: readonly RankingEntry[] = DUMMY_RANKING,
@@ -77,13 +94,35 @@ export class MockRankingRepository implements RankingRepository {
     });
   }
 
-  async fetchTop(limit: number): Promise<RankingEntry[]> {
-    await this.wait();
-    return [...this.data].sort((a, b) => b.score - a.score).slice(0, limit);
+  private all(): RankingEntry[] {
+    const me = this.submitted;
+    return me
+      ? [...this.data, { id: SAMPLE_MY_PUBLIC_ID, name: me.name, flag: me.flag, score: me.score, combo: me.combo }]
+      : [...this.data];
   }
 
-  async submit(record: MyRecord): Promise<void> {
+  async fetchTop(limit: number): Promise<RankedEntry[]> {
     await this.wait();
-    if (!this.submitted || record.score > this.submitted.score) this.submitted = record;
+    return rankWithMe(this.all(), null).entries.slice(0, limit);
+  }
+
+  async rankOf(score: number, combo: number): Promise<number> {
+    await this.wait();
+    return 1 + this.all().filter((e) => e.score > score || (e.score === score && e.combo > combo)).length;
+  }
+
+  async submit(record: PlayerRecord): Promise<SubmitResult> {
+    await this.wait();
+    // サーバーと同じ確認をする
+    const name = sanitizeName(record.name);
+    if (!name) throw new RankingError('invalid-name', 'name must be 1-12 characters');
+    if (!isPossibleScore(record.score, record.combo)) throw new RankingError('invalid-score', 'invalid score');
+    const prev = this.submitted;
+    const better =
+      !prev || record.score > prev.score || (record.score === prev.score && record.combo > prev.combo);
+    this.submitted = better ? { ...record, name } : { ...prev, name, flag: record.flag };
+    const best = this.submitted;
+    const rank = 1 + this.data.filter((e) => e.score > best.score || (e.score === best.score && e.combo > best.combo)).length;
+    return { publicId: SAMPLE_MY_PUBLIC_ID, rank };
   }
 }
