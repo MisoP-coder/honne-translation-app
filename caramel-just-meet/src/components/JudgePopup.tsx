@@ -55,10 +55,7 @@ export function JudgePopup({ event, x, y }: Props) {
         {LABELS[event.judge]}
       </Text>
       {event.judge !== 'miss' && (
-        <Text style={[styles.points, { color }]}>
-          +{event.points}
-          {event.combo >= 2 ? `  ${event.combo} COMBO` : ''}
-        </Text>
+        <Text style={[styles.points, { color }]}>+{event.points}</Text>
       )}
     </Animated.View>
   );

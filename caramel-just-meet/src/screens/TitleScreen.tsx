@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Animated, Easing, Platform, StyleSheet, Text, View } from 'react-native';
 
 import { GameButton } from '../components/GameButton';
+import { PuddingArt } from '../components/PuddingArt';
 import { titleFor } from '../game/titles';
 import type { HighScore } from '../storage/highScore';
 import { colors } from '../theme/colors';
@@ -29,7 +30,7 @@ export function TitleScreen({ highScore, onStart, onRanking }: Props) {
     return () => loop.stop();
   }, [wobble]);
 
-  const translateX = wobble.interpolate({ inputRange: [-1, 1], outputRange: [-14, 14] });
+  const translateX = wobble.interpolate({ inputRange: [-1, 1], outputRange: [-8, 8] });
   const skewX = wobble.interpolate({ inputRange: [-1, 1], outputRange: ['6deg', '-6deg'] });
 
   return (
@@ -37,11 +38,15 @@ export function TitleScreen({ highScore, onStart, onRanking }: Props) {
       <Text style={styles.kicker}>極限！</Text>
       <Text style={styles.title}>カラメル・{'\n'}ジャスト・ミート</Text>
 
-      <Animated.View style={[styles.pudding, { transform: [{ translateX }, { skewX }] }]}>
-        <View style={styles.cap} />
-        <View style={styles.body} />
-        <View style={styles.plate} />
-      </Animated.View>
+      <View style={styles.pudding}>
+        <PuddingArt
+          topHalf={46}
+          bottomHalf={66}
+          height={78}
+          caramelCount={6}
+          bodyStyle={{ transform: [{ translateX }, { skewX }] }}
+        />
+      </View>
 
       <Text style={styles.howto}>
         ぷるぷる揺れるプリンの頂点に{'\n'}タップでカラメルを落とせ！{'\n'}ズレたら即ゲームオーバー
@@ -80,27 +85,7 @@ const styles = StyleSheet.create({
     color: colors.caramel,
     textAlign: 'center',
   },
-  pudding: { marginTop: 28, marginBottom: 20, alignItems: 'center' },
-  cap: { width: 92, height: 22, borderRadius: 46, backgroundColor: colors.caramel, marginBottom: -11, zIndex: 1 },
-  body: {
-    width: 128,
-    height: 0,
-    borderLeftWidth: 20,
-    borderRightWidth: 20,
-    borderBottomWidth: 86,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderBottomColor: colors.pudding,
-  },
-  plate: {
-    width: 170,
-    height: 16,
-    borderRadius: 85,
-    backgroundColor: colors.plate,
-    borderWidth: 2,
-    borderColor: colors.plateShadow,
-    marginTop: -6,
-  },
+  pudding: { marginTop: 20, marginBottom: 14, alignItems: 'center' },
   howto: { fontSize: 15, lineHeight: 22, color: colors.text, textAlign: 'center', fontWeight: '600' },
   best: { marginTop: 16, alignItems: 'center' },
   bestText: { fontSize: 14, color: colors.textSub, fontWeight: '700' },

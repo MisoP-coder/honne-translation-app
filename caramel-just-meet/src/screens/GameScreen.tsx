@@ -8,11 +8,15 @@ import {
   View,
 } from 'react-native';
 
+import { Backdrop } from '../components/Backdrop';
 import { CaramelDrop } from '../components/CaramelDrop';
+import { ComboPopup } from '../components/ComboPopup';
 import { Dropper } from '../components/Dropper';
 import { GameOverPanel } from '../components/GameOverPanel';
 import { JudgePopup } from '../components/JudgePopup';
-import { Pudding } from '../components/Pudding';
+import { ParticleLayer } from '../components/ParticleLayer';
+import { type BounceTrigger, Pudding } from '../components/Pudding';
+import { Vignette } from '../components/Vignette';
 import {
   createConfig,
   createGame,
@@ -22,12 +26,44 @@ import {
   step,
   tapDrop,
 } from '../game/engine';
+import {
+  clearParticles,
+  createParticleSystem,
+  type ParticleSystem,
+  spawnBurst,
+  stepParticles,
+} from '../game/particles';
 import { randomSeed } from '../game/rng';
 import { useGameLoop } from '../hooks/useGameLoop';
 import { shareToX } from '../share/xShare';
 import { colors } from '../theme/colors';
+import { sepia } from '../theme/tone';
 
 const USE_NATIVE_DRIVER = Platform.OS !== 'web';
+
+/** ミスした瞬間のスクリーンシェイク（x, y の振れ幅。だんだん収まる） */
+const SHAKE_STEPS: readonly [number, number][] = [
+  [30, -14],
+  [-26, 18],
+  [24, 10],
+  [-22, -16],
+  [18, 12],
+  [-15, -9],
+  [12, 8],
+  [-9, -6],
+  [6, 4],
+  [-3, -2],
+  [0, 0],
+];
+
+/** ゲームオーバー演出のセピア化の度合い（0〜1） */
+export function sepiaAmountFor(game: GameState): number {
+  if (game.status === 'over') return 1;
+  if (game.status !== 'sliding' || !game.slide) return 0;
+  // 滑り始めてすぐにグッと色が抜ける
+  const p = Math.min(1, game.slide.progress * 1.6);
+  return 1 - (1 - p) ** 3;
+}
 
 export interface GameResult {
   score: number;
@@ -52,8 +88,15 @@ export function GameScreen({ bestScore, onGameOver, onRanking, onTitle, seed }: 
   );
   const [game, setGame] = useState<GameState>(() => createGame(seed ?? randomSeed()));
   const gameRef = useRef(game);
+  const [particles, setParticles] = useState<ParticleSystem>(() =>
+    createParticleSystem(randomSeed()),
+  );
+  const particlesRef = useRef(particles);
   const [isNewRecord, setIsNewRecord] = useState(false);
-  const shake = useRef(new Animated.Value(0)).current;
+  const shakeX = useRef(new Animated.Value(0)).current;
+  const shakeY = useRef(new Animated.Value(0)).current;
+  const flash = useRef(new Animated.Value(0)).current;
+  const [flashColor, setFlashColor] = useState('#FFFFFF');
   const reported = useRef(false);
 
   const update = useCallback((next: GameState) => {
@@ -61,24 +104,63 @@ export function GameScreen({ bestScore, onGameOver, onRanking, onTitle, seed }: 
     setGame(next);
   }, []);
 
+  const setParticleSystem = useCallback((next: ParticleSystem) => {
+    if (next === particlesRef.current) return;
+    particlesRef.current = next;
+    setParticles(next);
+  }, []);
+
+  const runFlash = useCallback(
+    (color: string, peak: number, duration: number) => {
+      setFlashColor(color);
+      flash.setValue(peak);
+      Animated.timing(flash, { toValue: 0, duration, useNativeDriver: USE_NATIVE_DRIVER }).start();
+    },
+    [flash],
+  );
+
   useGameLoop(
     (dt) => {
       if (!config) return;
       const prev = gameRef.current;
       const next = step(prev, config, dt);
+      let fx = particlesRef.current;
+      const judge = next.lastJudge;
+      if (judge && judge.id !== prev.lastJudge?.id) {
+        if (judge.judge === 'miss') {
+          fx = clearParticles(fx);
+        } else {
+          // 成功：プリンの頂点からキラキラが飛び散る
+          fx = spawnBurst(fx, puddingCenterX(next, config), config.puddingTopY - 6, judge.judge, judge.combo);
+        }
+      }
+      fx = stepParticles(fx, dt);
       if (next !== prev) update(next);
+      setParticleSystem(fx);
     },
     config !== null && game.status !== 'over',
   );
 
-  // ミスした瞬間に画面を揺らす
+  // 成功：ハイコンボの JUST MEET では画面がまぶしく光る
+  useEffect(() => {
+    const j = game.lastJudge;
+    if (!j || j.judge !== 'perfect' || j.combo < 10) return;
+    runFlash('#FFF3B0', Math.min(0.5, 0.2 + j.combo * 0.01), 260);
+  }, [game.lastJudge, runFlash]);
+
+  // 失敗：画面全体を激しく揺らし、一瞬白く光らせる
   useEffect(() => {
     if (game.status !== 'sliding') return;
-    const seq = [10, -10, 7, -7, 3, 0].map((toValue) =>
-      Animated.timing(shake, { toValue, duration: 45, useNativeDriver: USE_NATIVE_DRIVER }),
-    );
-    Animated.sequence(seq).start();
-  }, [game.status, shake]);
+    runFlash('#FFFFFF', 0.85, 420);
+    const step = (to: number, v: Animated.Value) =>
+      Animated.timing(v, { toValue: to, duration: 34, useNativeDriver: USE_NATIVE_DRIVER });
+    const anim = Animated.parallel([
+      Animated.sequence(SHAKE_STEPS.map(([x]) => step(x, shakeX))),
+      Animated.sequence(SHAKE_STEPS.map(([, y]) => step(y, shakeY))),
+    ]);
+    anim.start();
+    return () => anim.stop();
+  }, [game.status, shakeX, shakeY, runFlash]);
 
   useEffect(() => {
     if (game.status !== 'over' || reported.current) return;
@@ -100,50 +182,70 @@ export function GameScreen({ bestScore, onGameOver, onRanking, onTitle, seed }: 
   const retry = () => {
     reported.current = false;
     setIsNewRecord(false);
+    setParticleSystem(clearParticles(particlesRef.current));
+    shakeX.setValue(0);
+    shakeY.setValue(0);
     update(createGame(randomSeed()));
   };
 
-  return (
-    <View style={styles.root}>
-      <View style={styles.hud}>
-        <View>
-          <Text style={styles.hudLabel}>SCORE</Text>
-          <Text style={styles.hudValue} testID="hud-score">
-            {game.score}
-          </Text>
-        </View>
-        <View style={styles.hudCenter}>
-          <Text style={styles.hudLabel}>連続</Text>
-          <Text style={[styles.hudValue, styles.combo]} testID="hud-combo">
-            {game.combo}
-          </Text>
-        </View>
-        <View style={styles.hudRight}>
-          <Text style={styles.hudLabel}>BEST</Text>
-          <Text style={styles.hudValue}>{Math.max(bestScore, game.score)}</Text>
-        </View>
-      </View>
+  const tone = sepiaAmountFor(game);
+  const toned = (hex: string) => sepia(hex, tone);
 
-      {/* 押した瞬間に反応させたいので Pressable ではなくレスポンダーを直接使う */}
-      <View
-        testID="play-area"
-        style={styles.playArea}
-        onStartShouldSetResponder={() => true}
-        onResponderGrant={onTap}
-        onLayout={onLayout}
-        accessible
-        accessibilityRole="button"
-        accessibilityLabel="タップでカラメルを落とす"
+  return (
+    <View style={[styles.root, { backgroundColor: toned(colors.background) }]}>
+      <Animated.View
+        style={[styles.shaker, { transform: [{ translateX: shakeX }, { translateY: shakeY }] }]}
       >
-        <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ translateX: shake }] }]}>
-          {config && <Stage config={config} game={game} />}
-        </Animated.View>
-        {config && game.combo === 0 && !game.drop && game.status === 'playing' && (
-          <Text style={styles.hint} pointerEvents="none">
-            タップでカラメル投下！{'\n'}プリンの頂点を狙え
-          </Text>
-        )}
-      </View>
+        <View style={styles.hud}>
+          <View>
+            <Text style={[styles.hudLabel, { color: toned(colors.textSub) }]}>SCORE</Text>
+            <Text style={[styles.hudValue, { color: toned(colors.text) }]} testID="hud-score">
+              {game.score}
+            </Text>
+          </View>
+          <View style={styles.hudCenter}>
+            <Text style={[styles.hudLabel, { color: toned(colors.textSub) }]}>連続</Text>
+            <Text
+              style={[styles.hudValue, styles.combo, { color: toned(colors.accent) }]}
+              testID="hud-combo"
+            >
+              {game.combo}
+            </Text>
+          </View>
+          <View style={styles.hudRight}>
+            <Text style={[styles.hudLabel, { color: toned(colors.textSub) }]}>BEST</Text>
+            <Text style={[styles.hudValue, { color: toned(colors.text) }]}>
+              {Math.max(bestScore, game.score)}
+            </Text>
+          </View>
+        </View>
+
+        {/* 押した瞬間に反応させたいので Pressable ではなくレスポンダーを直接使う */}
+        <View
+          testID="play-area"
+          style={styles.playArea}
+          onStartShouldSetResponder={() => true}
+          onResponderGrant={onTap}
+          onLayout={onLayout}
+          accessible
+          accessibilityRole="button"
+          accessibilityLabel="タップでカラメルを落とす"
+        >
+          {config && (
+            <Stage config={config} game={game} particles={particles} sepiaAmount={tone} />
+          )}
+          {config && game.combo === 0 && !game.drop && game.status === 'playing' && (
+            <Text style={styles.hint} pointerEvents="none">
+              タップでカラメル投下！{'\n'}プリンの頂点を狙え
+            </Text>
+          )}
+        </View>
+      </Animated.View>
+
+      <Animated.View
+        pointerEvents="none"
+        style={[StyleSheet.absoluteFill, { backgroundColor: flashColor, opacity: flash }]}
+      />
 
       {game.status === 'over' && (
         <GameOverPanel
@@ -162,8 +264,23 @@ export function GameScreen({ bestScore, onGameOver, onRanking, onTitle, seed }: 
   );
 }
 
-function Stage({ config, game }: { config: GameConfig; game: GameState }) {
+interface StageProps {
+  config: GameConfig;
+  game: GameState;
+  particles: ParticleSystem;
+  sepiaAmount: number;
+}
+
+function Stage({ config, game, particles, sepiaAmount }: StageProps) {
   const centerX = puddingCenterX(game, config);
+  const judge = game.lastJudge;
+  const bounce = useMemo<BounceTrigger | null>(
+    () =>
+      judge && judge.judge !== 'miss'
+        ? { id: judge.id, strength: judge.judge === 'perfect' ? 1 : 0.55 }
+        : null,
+    [judge],
+  );
   const slide = game.slide;
   let slidingDrop: { x: number; y: number; tilt: number } | null = null;
   if (slide) {
@@ -186,15 +303,29 @@ function Stage({ config, game }: { config: GameConfig; game: GameState }) {
 
   return (
     <>
-      <Dropper x={config.dropperX} y={config.dropStartY} />
+      <Backdrop
+        width={config.width}
+        height={config.height}
+        tableY={config.puddingTopY + config.puddingHeight - 4}
+        sepiaAmount={sepiaAmount}
+      />
+      <Dropper x={config.dropperX} y={config.dropStartY} sepiaAmount={sepiaAmount} />
       <Pudding
         config={config}
         centerX={centerX}
         velocity={game.puddingVelocity}
         caramelCount={game.combo}
+        bounce={bounce}
+        sepiaAmount={sepiaAmount}
       />
       {game.drop && (
-        <CaramelDrop testID="falling-drop" x={game.drop.x} y={game.drop.y} radius={config.dropRadius} />
+        <CaramelDrop
+          testID="falling-drop"
+          x={game.drop.x}
+          y={game.drop.y}
+          radius={config.dropRadius}
+          stretch={1 + Math.min(game.drop.vy / 3000, 0.25)}
+        />
       )}
       {slidingDrop && (
         <CaramelDrop
@@ -203,15 +334,20 @@ function Stage({ config, game }: { config: GameConfig; game: GameState }) {
           y={slidingDrop.y}
           radius={config.dropRadius}
           tilt={slidingDrop.tilt}
+          sepiaAmount={sepiaAmount}
         />
       )}
+      <ParticleLayer width={config.width} height={config.height} particles={particles.particles} />
+      <Vignette width={config.width} height={config.height} amount={sepiaAmount} />
       <JudgePopup event={game.lastJudge} x={centerX} y={config.puddingTopY} />
+      <ComboPopup event={game.lastJudge} y={config.height * 0.3} width={config.width} />
     </>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
+  shaker: { flex: 1 },
   hud: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -232,6 +368,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 16,
     fontWeight: '800',
-    color: colors.textSub,
+    color: colors.text,
+    textShadowColor: '#FFFFFF',
+    textShadowRadius: 6,
+    textShadowOffset: { width: 0, height: 0 },
   },
 });
