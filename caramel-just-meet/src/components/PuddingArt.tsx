@@ -1,6 +1,6 @@
 import { useId } from 'react';
 import { Animated, StyleSheet, View, type ViewStyle } from 'react-native';
-import Svg, { Circle, Defs, Ellipse, LinearGradient, Path, RadialGradient, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, Ellipse, G, LinearGradient, Path, RadialGradient, Stop } from 'react-native-svg';
 
 import { sepia } from '../theme/tone';
 
@@ -50,11 +50,52 @@ export function puddingMetrics({ topHalf, bottomHalf, height, caramelCount }: Pu
 
 /** たれの位置（頂上の半幅に対する比率）と基本の長さ（高さに対する比率） */
 const DRIPS = [
-  { at: -0.62, len: 0.22 },
-  { at: -0.2, len: 0.42 },
-  { at: 0.28, len: 0.3 },
-  { at: 0.68, len: 0.16 },
+  { at: -0.66, len: 0.2 },
+  { at: -0.12, len: 0.36 },
+  { at: 0.18, len: 0.12 },
+  { at: 0.64, len: 0.26 },
 ];
+
+/** 顔の表情。shock はゲームオーバー時 */
+export type FaceMood = 'normal' | 'shock';
+
+/** シュールな顔：点の目と一本線の口。(fx, fy) は両目の中間 */
+function Face({ fx, fy, T, H, mood }: { fx: number; fy: number; T: number; H: number; mood: FaceMood }) {
+  const eyeGap = T * 0.36;
+  const mouthY = fy + H * 0.17;
+  const stroke = Math.max(2, T * 0.045);
+  if (mood === 'shock') {
+    // 白目をむいたような小さい目と、ぐにゃぐにゃの口
+    const w = T * 0.16;
+    return (
+      <G>
+        <Circle cx={fx - eyeGap} cy={fy} r={T * 0.085} fill="#FFFFFF" stroke="#111111" strokeWidth={stroke * 0.7} />
+        <Circle cx={fx + eyeGap} cy={fy} r={T * 0.085} fill="#FFFFFF" stroke="#111111" strokeWidth={stroke * 0.7} />
+        <Circle cx={fx - eyeGap} cy={fy} r={T * 0.025} fill="#111111" />
+        <Circle cx={fx + eyeGap} cy={fy} r={T * 0.025} fill="#111111" />
+        <Path
+          d={`M ${fx - w} ${mouthY} q ${w / 4} ${-w / 3} ${w / 2} 0 t ${w / 2} 0 t ${w / 2} 0 t ${w / 2} 0`}
+          stroke="#111111"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          fill="none"
+        />
+      </G>
+    );
+  }
+  return (
+    <G>
+      <Ellipse cx={fx - eyeGap} cy={fy} rx={T * 0.05} ry={T * 0.07} fill="#111111" />
+      <Ellipse cx={fx + eyeGap} cy={fy} rx={T * 0.05} ry={T * 0.07} fill="#111111" />
+      <Path
+        d={`M ${fx - T * 0.13} ${mouthY} L ${fx + T * 0.13} ${mouthY}`}
+        stroke="#111111"
+        strokeWidth={stroke}
+        strokeLinecap="round"
+      />
+    </G>
+  );
+}
 
 function bodyPath(cx: number, y0: number, y1: number, T: number, B: number, H: number) {
   const r = T * 0.16;
@@ -110,6 +151,9 @@ interface Props extends PuddingShape {
   sepiaAmount?: number;
   /** プリン本体だけに掛ける変形（ぶるん！・傾き） */
   bodyStyle?: Animated.WithAnimatedValue<ViewStyle>;
+  /** 顔のずれ（慣性で遅れて動く） */
+  faceOffset?: { x: number; y: number };
+  faceMood?: FaceMood;
   testID?: string;
 }
 
@@ -120,6 +164,8 @@ export function PuddingArt({
   caramelCount,
   sepiaAmount = 0,
   bodyStyle,
+  faceOffset = { x: 0, y: 0 },
+  faceMood = 'normal',
   testID,
 }: Props) {
   // Web では SVG の id がページ全体で共有されるので、インスタンスごとに変える
@@ -228,6 +274,8 @@ export function PuddingArt({
           />
           <Circle cx={cx - T * 0.52} cy={y0 - m.dome * 0.15} r={T * 0.05} fill="#FFFFFF" opacity={0.9} />
           <Circle cx={cx + T * 0.45} cy={y0 - m.dome * 0.2} r={T * 0.03} fill="#FFFFFF" opacity={0.6} />
+          {/* ド真ん中にシュールな顔 */}
+          <Face fx={cx + faceOffset.x} fy={y0 + H * 0.5 + faceOffset.y} T={T} H={H} mood={faceMood} />
         </Svg>
       </Animated.View>
     </View>

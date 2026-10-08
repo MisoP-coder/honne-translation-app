@@ -63,21 +63,23 @@ describe('キラキラ（パーティクル）', () => {
 describe('COMBO 表示', () => {
   it('2コンボ以上で大きく表示し、はみ出さない大きさにする', async () => {
     const event = { id: 1, judge: 'perfect' as const, offset: 0, points: 300, combo: 21 };
-    await render(<ComboPopup event={event} y={200} width={390} />);
+    await render(<ComboPopup event={event} y={200} width={390} time={0} />);
     expect(screen.getByTestId('combo-popup')).toHaveTextContent('21 COMBO!!');
-    const { fontSize } = comboStyle(21, 390 - 80);
-    expect(fontSize * comboLabel(21).length * 0.72).toBeLessThanOrEqual(390 - 80 + 1e-6);
+    const { fontSize } = comboStyle(21, 390 - 64);
+    expect(fontSize * comboLabel(21).length * 0.72 + 18).toBeLessThanOrEqual(390 - 64 + 1e-6);
   });
 
   it('1コンボ目やミスでは出さない', async () => {
-    await render(<ComboPopup event={{ id: 1, judge: 'perfect', offset: 0, points: 300, combo: 1 }} y={0} width={390} />);
+    await render(<ComboPopup event={{ id: 1, judge: 'perfect', offset: 0, points: 300, combo: 1 }} y={0} width={390} time={0} />);
     expect(screen.queryByTestId('combo-popup')).toBeNull();
-    await render(<ComboPopup event={{ id: 2, judge: 'miss', offset: 99, points: 0, combo: 5 }} y={0} width={390} />);
+    await render(<ComboPopup event={{ id: 2, judge: 'miss', offset: 99, points: 0, combo: 5 }} y={0} width={390} time={0} />);
     expect(screen.queryByTestId('combo-popup')).toBeNull();
   });
 
   it('コンボ数で色と大きさが変わる', () => {
-    expect(comboStyle(12).color).not.toBe(comboStyle(3).color);
+    expect(comboStyle(12).fill).not.toBe(comboStyle(3).fill);
+    expect(comboStyle(25).rainbow).toBe(true);
+    expect(comboStyle(12).rainbow).toBe(false);
     expect(comboStyle(12).fontSize).toBeGreaterThan(comboStyle(3).fontSize);
   });
 });

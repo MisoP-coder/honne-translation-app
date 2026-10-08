@@ -3,7 +3,9 @@ import { Animated, Platform, StyleSheet, Text, View } from 'react-native';
 
 import { titleFor } from '../game/titles';
 import { colors } from '../theme/colors';
+import { useJitter } from '../hooks/useJitter';
 import { GameButton } from './GameButton';
+import { OutlinedText } from './OutlinedText';
 
 const USE_NATIVE_DRIVER = Platform.OS !== 'web';
 
@@ -31,6 +33,7 @@ export function GameOverPanel({
   onTitle,
 }: Props) {
   const enter = useRef(new Animated.Value(0)).current;
+  const jitter = useJitter(true, 3.5, 220);
 
   useEffect(() => {
     Animated.spring(enter, {
@@ -46,7 +49,12 @@ export function GameOverPanel({
   return (
     <View style={styles.backdrop} testID="game-over">
       <Animated.View style={[styles.card, { opacity: enter, transform: [{ translateY }] }]}>
-        <Text style={styles.heading}>GAME OVER</Text>
+        {/* 絶望感：ガタガタ震える GAME OVER */}
+        <Animated.View style={{ transform: jitter }}>
+          <OutlinedText fill="#E60012" shadow="#2A0000" outlineWidth={3} depth={5} style={styles.heading}>
+            GAME OVER
+          </OutlinedText>
+        </Animated.View>
         <Text style={styles.sub}>カラメルが滑り落ちた…</Text>
 
         <View style={styles.resultRow}>
@@ -101,7 +109,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     alignItems: 'center',
   },
-  heading: { fontSize: 30, fontWeight: '900', color: colors.caramel, letterSpacing: 2 },
+  heading: { fontSize: 38, fontWeight: '900', fontStyle: 'italic', letterSpacing: 2 },
   sub: { fontSize: 14, color: colors.textSub, marginTop: 2 },
   resultRow: { flexDirection: 'row', gap: 16, marginTop: 16 },
   resultBox: {

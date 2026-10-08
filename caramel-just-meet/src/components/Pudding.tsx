@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Animated, Platform, View } from 'react-native';
 
 import type { GameConfig } from '../game/engine';
-import { PuddingArt, puddingMetrics } from './PuddingArt';
+import { type FaceMood, PuddingArt, puddingMetrics } from './PuddingArt';
 
 const USE_NATIVE_DRIVER = Platform.OS !== 'web';
 
@@ -23,13 +23,25 @@ interface Props {
   caramelCount: number;
   bounce: BounceTrigger | null;
   sepiaAmount: number;
+  /** 慣性で遅れて動く顔のずれ */
+  faceOffset: { x: number; y: number };
+  faceMood: FaceMood;
 }
 
 /** 揺れても頂点の位置がズレて見えないよう、揺れによる変形は控えめにしている */
 const MAX_LEAN_DEG = 4;
 const MAX_SQUASH = 0.06;
 
-export function Pudding({ config, centerX, velocity, caramelCount, bounce, sepiaAmount }: Props) {
+export function Pudding({
+  config,
+  centerX,
+  velocity,
+  caramelCount,
+  bounce,
+  sepiaAmount,
+  faceOffset,
+  faceMood,
+}: Props) {
   const shape = {
     topHalf: config.puddingTopHalfWidth,
     bottomHalf: config.puddingBottomHalfWidth,
@@ -83,6 +95,8 @@ export function Pudding({ config, centerX, velocity, caramelCount, bounce, sepia
       <PuddingArt
         {...shape}
         sepiaAmount={sepiaAmount}
+        faceOffset={faceOffset}
+        faceMood={faceMood}
         bodyStyle={{
           transform: [
             { scaleX },

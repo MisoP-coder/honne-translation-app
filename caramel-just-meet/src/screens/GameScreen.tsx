@@ -12,10 +12,12 @@ import { Backdrop } from '../components/Backdrop';
 import { CaramelDrop } from '../components/CaramelDrop';
 import { ComboPopup } from '../components/ComboPopup';
 import { Dropper } from '../components/Dropper';
+import { Fever, feverLevel } from '../components/Fever';
 import { GameOverPanel } from '../components/GameOverPanel';
 import { JudgePopup } from '../components/JudgePopup';
 import { ParticleLayer } from '../components/ParticleLayer';
 import { type BounceTrigger, Pudding } from '../components/Pudding';
+import { TvNoise } from '../components/TvNoise';
 import { Vignette } from '../components/Vignette';
 import {
   createConfig,
@@ -26,6 +28,7 @@ import {
   step,
   tapDrop,
 } from '../game/engine';
+import { type FaceState, INITIAL_FACE, stepFace } from '../game/face';
 import {
   clearParticles,
   createParticleSystem,
@@ -92,6 +95,8 @@ export function GameScreen({ bestScore, onGameOver, onRanking, onTitle, seed }: 
     createParticleSystem(randomSeed()),
   );
   const particlesRef = useRef(particles);
+  const [face, setFace] = useState<FaceState>(INITIAL_FACE);
+  const faceRef = useRef(face);
   const [isNewRecord, setIsNewRecord] = useState(false);
   const shakeX = useRef(new Animated.Value(0)).current;
   const shakeY = useRef(new Animated.Value(0)).current;
@@ -135,8 +140,11 @@ export function GameScreen({ bestScore, onGameOver, onRanking, onTitle, seed }: 
         }
       }
       fx = stepParticles(fx, dt);
+      // 顔は慣性で遅れてついてくる
+      faceRef.current = stepFace(faceRef.current, next.puddingVelocity, dt, config.puddingTopHalfWidth * 0.24);
       if (next !== prev) update(next);
       setParticleSystem(fx);
+      setFace(faceRef.current);
     },
     config !== null && game.status !== 'over',
   );
@@ -185,6 +193,8 @@ export function GameScreen({ bestScore, onGameOver, onRanking, onTitle, seed }: 
     setParticleSystem(clearParticles(particlesRef.current));
     shakeX.setValue(0);
     shakeY.setValue(0);
+    faceRef.current = INITIAL_FACE;
+    setFace(INITIAL_FACE);
     update(createGame(randomSeed()));
   };
 
@@ -232,7 +242,7 @@ export function GameScreen({ bestScore, onGameOver, onRanking, onTitle, seed }: 
           accessibilityLabel="タップでカラメルを落とす"
         >
           {config && (
-            <Stage config={config} game={game} particles={particles} sepiaAmount={tone} />
+            <Stage config={config} game={game} particles={particles} face={face} sepiaAmount={tone} />
           )}
           {config && game.combo === 0 && !game.drop && game.status === 'playing' && (
             <Text style={styles.hint} pointerEvents="none">
@@ -246,6 +256,9 @@ export function GameScreen({ bestScore, onGameOver, onRanking, onTitle, seed }: 
         pointerEvents="none"
         style={[StyleSheet.absoluteFill, { backgroundColor: flashColor, opacity: flash }]}
       />
+
+      {/* ゲームオーバー：古いテレビの砂嵐（ザーッ） */}
+      <TvNoise amount={tone} />
 
       {game.status === 'over' && (
         <GameOverPanel
@@ -268,10 +281,11 @@ interface StageProps {
   config: GameConfig;
   game: GameState;
   particles: ParticleSystem;
+  face: FaceState;
   sepiaAmount: number;
 }
 
-function Stage({ config, game, particles, sepiaAmount }: StageProps) {
+function Stage({ config, game, particles, face, sepiaAmount }: StageProps) {
   const centerX = puddingCenterX(game, config);
   const judge = game.lastJudge;
   const bounce = useMemo<BounceTrigger | null>(
@@ -309,6 +323,14 @@ function Stage({ config, game, particles, sepiaAmount }: StageProps) {
         tableY={config.puddingTopY + config.puddingHeight - 4}
         sepiaAmount={sepiaAmount}
       />
+      <Fever
+        width={config.width}
+        height={config.height}
+        cx={centerX}
+        cy={config.puddingTopY + config.puddingHeight * 0.4}
+        level={feverLevel(game.combo, game.status === 'playing')}
+        time={game.time}
+      />
       <Dropper x={config.dropperX} y={config.dropStartY} sepiaAmount={sepiaAmount} />
       <Pudding
         config={config}
@@ -317,6 +339,8 @@ function Stage({ config, game, particles, sepiaAmount }: StageProps) {
         caramelCount={game.combo}
         bounce={bounce}
         sepiaAmount={sepiaAmount}
+        faceOffset={face}
+        faceMood={game.status === 'playing' ? 'normal' : 'shock'}
       />
       {game.drop && (
         <CaramelDrop
@@ -340,7 +364,7 @@ function Stage({ config, game, particles, sepiaAmount }: StageProps) {
       <ParticleLayer width={config.width} height={config.height} particles={particles.particles} />
       <Vignette width={config.width} height={config.height} amount={sepiaAmount} />
       <JudgePopup event={game.lastJudge} x={centerX} y={config.puddingTopY} />
-      <ComboPopup event={game.lastJudge} y={config.height * 0.3} width={config.width} />
+      <ComboPopup event={game.lastJudge} y={config.height * 0.3} width={config.width} time={game.time} />
     </>
   );
 }
