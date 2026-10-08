@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react-native';
 
 import { ComboPopup, comboLabel, comboStyle } from '../src/components/ComboPopup';
 import { PuddingArt, puddingMetrics } from '../src/components/PuddingArt';
+import { RAY_COUNT, rayPolygons, TitleBackdrop } from '../src/components/TitleBackdrop';
 import { createConfig, createGame, type GameState, step, tapDrop } from '../src/game/engine';
 import {
   burstCount,
@@ -129,5 +130,24 @@ describe('SVG プリン', () => {
   it('描画できる', async () => {
     await render(<PuddingArt testID="art" topHalf={50} bottomHalf={72} height={75} caramelCount={5} sepiaAmount={0.5} />);
     expect(screen.getByTestId('art')).toBeTruthy();
+  });
+});
+
+describe('タイトル画面の背景', () => {
+  it('放射線は 1 本おきに色を付け、中心から外へ伸びる', () => {
+    const rays = rayPolygons(100, 100, 50);
+    expect(rays).toHaveLength(RAY_COUNT / 2);
+    for (const r of rays) {
+      const [c, ...edge] = r.split(' ').map((p) => p.split(',').map(Number));
+      expect(c).toEqual([100, 100]);
+      for (const [x, y] of edge) expect(Math.hypot(x - 100, y - 100)).toBeCloseTo(50, 0);
+    }
+  });
+
+  it('描画できる（大きさが決まるまでは何も描かない）', async () => {
+    const view = await render(<TitleBackdrop width={0} height={0} />);
+    expect(screen.queryByTestId('title-backdrop')).toBeNull();
+    await view.rerender(<TitleBackdrop width={390} height={844} />);
+    expect(screen.getByTestId('title-backdrop')).toBeTruthy();
   });
 });
