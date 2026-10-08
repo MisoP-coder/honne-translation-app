@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Animated, Platform, StyleSheet, Text, View } from 'react-native';
 
 import { titleFor } from '../game/titles';
+import { buildShareText, buildXShareUrl } from '../share/xShare';
 import { colors } from '../theme/colors';
 import { useJitter } from '../hooks/useJitter';
 import { GameButton } from './GameButton';
@@ -82,7 +83,13 @@ export function GameOverPanel({
         </Text>
 
         <View style={styles.buttons}>
-          <GameButton testID="share-x" label="𝕏 でシェア" variant="x" onPress={onShare} />
+          <GameButton
+            testID="share-x"
+            label="𝕏 でシェア"
+            variant="x"
+            onPress={onShare}
+            href={buildXShareUrl(buildShareText(combo))}
+          />
           <GameButton testID="retry" label="もう一回" onPress={onRetry} />
           <GameButton testID="to-ranking" label="世界ランキング" variant="secondary" onPress={onRanking} />
           <GameButton testID="to-title" label="タイトルへ" variant="secondary" onPress={onTitle} />

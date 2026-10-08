@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, type ViewStyle } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, type ViewStyle } from 'react-native';
 
 import { colors } from '../theme/colors';
 
@@ -8,15 +8,24 @@ interface Props {
   variant?: 'primary' | 'secondary' | 'x';
   style?: ViewStyle;
   testID?: string;
+  /**
+   * Web では本物のリンク（<a>）にする。
+   * 埋め込み先によってはスクリプトから新しいタブを開けないため、リンクとして押してもらう。
+   */
+  href?: string;
 }
 
-export function GameButton({ label, onPress, variant = 'primary', style, testID }: Props) {
+export function GameButton({ label, onPress, variant = 'primary', style, testID, href }: Props) {
+  const asLink = Platform.OS === 'web' && href !== undefined;
+  // href / hrefAttrs は react-native-web だけが解釈する（型定義にはない）
+  const linkProps = asLink ? { href, hrefAttrs: { target: '_blank', rel: 'noopener noreferrer' } } : {};
   return (
     <Pressable
       testID={testID}
-      accessibilityRole="button"
+      accessibilityRole={asLink ? 'link' : 'button'}
       accessibilityLabel={label}
-      onPress={onPress}
+      onPress={asLink ? undefined : onPress}
+      {...linkProps}
       style={({ pressed }) => [
         styles.base,
         styles[variant],
