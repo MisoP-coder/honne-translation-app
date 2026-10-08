@@ -30,6 +30,9 @@ export class SoundManager {
   /** 鳴っていてほしい BGM（BGM をオンに戻したときやブラウザの再生許可のあとに再開するため） */
   private wantedBgm: BgmName | null = null;
   private settings: SoundSettings = DEFAULT_SOUND_SETTINGS;
+  /** 一時停止中（BGM を途中で止めていて、再開すると続きから流れる） */
+  private suspended = false;
+  private suspendedBgm: BgmName | null = null;
 
   constructor(
     private readonly create: CreatePlayer = (source) => createAudioPlayer(source),
@@ -94,7 +97,7 @@ export class SoundManager {
   /** BGM を切り替える。同じ曲が鳴っていればそのまま */
   playBgm(name: BgmName): void {
     this.wantedBgm = name;
-    if (!this.bgmAudible()) return;
+    if (this.suspended || !this.bgmAudible()) return;
     if (this.currentBgm === name) return;
     this.pauseBgm();
     const player = this.players.get(name);
@@ -111,7 +114,48 @@ export class SoundManager {
   /** BGM をピタッと止める */
   stopBgm(): void {
     this.wantedBgm = null;
+    this.suspendedBgm = null;
     this.pauseBgm();
+  }
+
+  /** 一時停止：BGM をその場で止める（頭に戻さない） */
+  suspendBgm(): void {
+    if (this.suspended) return;
+    this.suspended = true;
+    this.suspendedBgm = this.currentBgm;
+    if (this.currentBgm) {
+      try {
+        this.players.get(this.currentBgm)?.pause();
+      } catch {
+        // 無視
+      }
+    }
+    this.currentBgm = null;
+  }
+
+  /** 一時停止から戻る：止めたところから続きを流す */
+  resumeBgm(): void {
+    if (!this.suspended) return;
+    this.suspended = false;
+    const resumeFrom = this.suspendedBgm;
+    this.suspendedBgm = null;
+    if (!this.wantedBgm || !this.bgmAudible()) return;
+    if (resumeFrom === this.wantedBgm) {
+      try {
+        this.players.get(resumeFrom)?.play();
+        this.currentBgm = resumeFrom;
+      } catch {
+        this.currentBgm = null;
+      }
+    } else {
+      this.playBgm(this.wantedBgm);
+    }
+  }
+
+  /** 一時停止を取り消す（BGM は鳴らさない。一時停止のまま別の画面に移るとき用） */
+  cancelSuspend(): void {
+    this.suspended = false;
+    this.suspendedBgm = null;
   }
 
   /**
@@ -119,7 +163,7 @@ export class SoundManager {
    * 最初のタップで呼んで、止められていた BGM を鳴らし直す。
    */
   unlock(): void {
-    if (!this.bgmAudible() || !this.wantedBgm) return;
+    if (this.suspended || !this.bgmAudible() || !this.wantedBgm) return;
     const player = this.players.get(this.wantedBgm);
     try {
       player?.play();
@@ -153,7 +197,9 @@ export class SoundManager {
     }
     if (!this.bgmAudible()) {
       this.pauseBgm();
-    } else if (this.wantedBgm && this.currentBgm !== this.wantedBgm) {
+      // 一時停止中に BGM をオフにしたら、再開しても続きからは流さない
+      this.suspendedBgm = null;
+    } else if (!this.suspended && this.wantedBgm && this.currentBgm !== this.wantedBgm) {
       this.playBgm(this.wantedBgm);
     }
     return this.settings;

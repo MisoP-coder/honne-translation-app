@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
+  AppState,
   type LayoutChangeEvent,
   Platform,
+  Pressable,
   StyleSheet,
   Text,
   View,
@@ -16,6 +18,9 @@ import { ComboPopup } from '../components/ComboPopup';
 import { Dropper } from '../components/Dropper';
 import { Fever, feverLevel } from '../components/Fever';
 import { GameOverPanel } from '../components/GameOverPanel';
+import { OutlinedText } from '../components/OutlinedText';
+import { PausePanel } from '../components/PausePanel';
+import { SoundSettingsPanel } from '../components/SoundSettingsPanel';
 import { JudgePopup } from '../components/JudgePopup';
 import { ParticleLayer } from '../components/ParticleLayer';
 import { type BounceTrigger, Pudding } from '../components/Pudding';
@@ -45,6 +50,9 @@ import { colors } from '../theme/colors';
 import { sepia } from '../theme/tone';
 
 const USE_NATIVE_DRIVER = Platform.OS !== 'web';
+
+/** 一時停止から戻るときのカウントダウン（3, 2, 1）の 1 つぶんの長さ（ミリ秒） */
+export const RESUME_COUNT_MS = 600;
 
 /** ミスした瞬間のスクリーンシェイク（x, y の振れ幅。だんだん収まる） */
 const SHAKE_STEPS: readonly [number, number][] = [
@@ -110,6 +118,11 @@ export function GameScreen({ bestScore, onGameOver, onRanking, onTitle, seed }: 
   soundRef.current = sound;
   useBgm('bgm_game');
 
+  // 一時停止。countdown は再開前の「3, 2, 1」（その間もゲームは止まったまま）
+  const [paused, setPaused] = useState(false);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [soundOpen, setSoundOpen] = useState(false);
+
   const update = useCallback((next: GameState) => {
     gameRef.current = next;
     setGame(next);
@@ -155,8 +168,44 @@ export function GameScreen({ bestScore, onGameOver, onRanking, onTitle, seed }: 
       setParticleSystem(fx);
       setFace(faceRef.current);
     },
-    config !== null && game.status !== 'over',
+    config !== null && game.status !== 'over' && !paused,
   );
+
+  const pause = useCallback(() => {
+    if (gameRef.current.status !== 'playing') return;
+    setPaused(true);
+    setCountdown(null);
+    soundRef.current?.manager.suspendBgm();
+  }, []);
+
+  const resume = () => {
+    setSoundOpen(false);
+    setCountdown(3);
+  };
+
+  // 再開前のカウントダウン。0 になったらゲームと BGM を再開する
+  useEffect(() => {
+    if (countdown === null) return;
+    if (countdown <= 0) {
+      setCountdown(null);
+      setPaused(false);
+      soundRef.current?.manager.resumeBgm();
+      return;
+    }
+    const id = setTimeout(() => setCountdown(countdown - 1), RESUME_COUNT_MS);
+    return () => clearTimeout(id);
+  }, [countdown]);
+
+  // アプリが裏に回ったら（電話・通知・ホームボタンなど）自動で一時停止する
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') pause();
+    });
+    return () => sub.remove();
+  }, [pause]);
+
+  // 一時停止したまま画面を離れたら、一時停止を取り消しておく（次の画面の BGM が流れるように）
+  useEffect(() => () => soundRef.current?.manager.cancelSuspend(), []);
 
   // 成功：ハイコンボの JUST MEET では画面がまぶしく光る
   useEffect(() => {
@@ -191,7 +240,7 @@ export function GameScreen({ bestScore, onGameOver, onRanking, onTitle, seed }: 
   };
 
   const onTap = () => {
-    if (!config) return;
+    if (!config || paused) return;
     const next = tapDrop(gameRef.current, config);
     if (next !== gameRef.current) {
       // 投下の「ヒュゥゥン」
@@ -202,6 +251,11 @@ export function GameScreen({ bestScore, onGameOver, onRanking, onTitle, seed }: 
 
   const retry = () => {
     reported.current = false;
+    setPaused(false);
+    setCountdown(null);
+    setSoundOpen(false);
+    sound?.manager.cancelSuspend();
+    sound?.manager.stopBgm();
     sound?.manager.playBgm('bgm_game');
     setIsNewRecord(false);
     setParticleSystem(clearParticles(particlesRef.current));
@@ -236,11 +290,26 @@ export function GameScreen({ bestScore, onGameOver, onRanking, onTitle, seed }: 
               {game.combo}
             </Text>
           </View>
-          <View style={styles.hudRight}>
-            <Text style={[styles.hudLabel, { color: toned(colors.textSub) }]}>BEST</Text>
-            <Text style={[styles.hudValue, { color: toned(colors.text) }]}>
-              {Math.max(bestScore, game.score)}
-            </Text>
+          <View style={styles.hudRightGroup}>
+            <View style={styles.hudRight}>
+              <Text style={[styles.hudLabel, { color: toned(colors.textSub) }]}>BEST</Text>
+              <Text style={[styles.hudValue, { color: toned(colors.text) }]}>
+                {Math.max(bestScore, game.score)}
+              </Text>
+            </View>
+            <Pressable
+              testID="pause"
+              accessibilityRole="button"
+              accessibilityLabel="一時停止"
+              accessibilityState={{ disabled: game.status !== 'playing' }}
+              disabled={game.status !== 'playing'}
+              onPress={pause}
+              hitSlop={10}
+              style={[styles.pauseButton, game.status !== 'playing' && styles.pauseHidden]}
+            >
+              <View style={styles.pauseBar} />
+              <View style={styles.pauseBar} />
+            </Pressable>
           </View>
         </View>
 
@@ -273,6 +342,36 @@ export function GameScreen({ bestScore, onGameOver, onRanking, onTitle, seed }: 
 
       {/* ゲームオーバー：古いテレビの砂嵐（ザーッ） */}
       <TvNoise amount={tone} />
+
+      {paused && countdown === null && !soundOpen && (
+        <PausePanel
+          combo={game.combo}
+          score={game.score}
+          onResume={resume}
+          onSoundSettings={() => setSoundOpen(true)}
+          onRetry={retry}
+          onTitle={() => {
+            sound?.manager.cancelSuspend();
+            onTitle();
+          }}
+        />
+      )}
+      {paused && soundOpen && <SoundSettingsPanel onClose={() => setSoundOpen(false)} />}
+      {countdown !== null && countdown > 0 && (
+        <View style={styles.countdown} pointerEvents="none" testID="resume-countdown">
+          <OutlinedText
+            key={countdown}
+            testID="resume-count"
+            fill="#FFE600"
+            shadow="#D0002A"
+            outlineWidth={4}
+            depth={6}
+            style={styles.countdownText}
+          >
+            {countdown}
+          </OutlinedText>
+        </View>
+      )}
 
       {game.status === 'over' && (
         <GameOverPanel
@@ -394,6 +493,28 @@ const styles = StyleSheet.create({
   },
   hudCenter: { alignItems: 'center' },
   hudRight: { alignItems: 'flex-end' },
+  hudRightGroup: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  pauseButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.card,
+    borderWidth: 2,
+    borderColor: colors.caramel,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+  },
+  pauseHidden: { opacity: 0 },
+  pauseBar: { width: 5, height: 16, borderRadius: 2, backgroundColor: colors.caramel },
+  countdown: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(60,30,0,0.25)',
+  },
+  countdownText: { fontSize: 120, fontWeight: '900', fontStyle: 'italic' },
   hudLabel: { fontSize: 11, fontWeight: '800', color: colors.textSub, letterSpacing: 1 },
   hudValue: { fontSize: 24, fontWeight: '900', color: colors.text },
   combo: { color: colors.accent, fontSize: 32 },
