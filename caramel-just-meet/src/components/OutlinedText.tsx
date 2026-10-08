@@ -48,8 +48,11 @@ export function OutlinedText({
   const layer = (key: string, dx: number, dy: number, color: string) => (
     <Text
       key={key}
+      // 縁取り・影用の重ねた文字は読み上げない（本体の 1 つだけ読ませる）
       accessible={false}
-      importantForAccessibility="no"
+      aria-hidden
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
       numberOfLines={numberOfLines}
       style={[style, styles.layer, { left: dx, top: dy, right: -dx, bottom: -dy, color }]}
     >

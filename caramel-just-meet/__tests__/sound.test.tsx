@@ -1,6 +1,14 @@
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import App from '../App';
+import {
+  clampVolume,
+  DEFAULT_SOUND_SETTINGS,
+  loadSoundSettings,
+  sanitizeSettings,
+  saveSoundSettings,
+} from '../src/audio/settings';
 import { SoundProvider } from '../src/audio/SoundContext';
 import { type PlayerLike, SoundManager } from '../src/audio/SoundManager';
 import {
@@ -13,6 +21,7 @@ import {
 } from '../src/audio/sounds';
 import { MockRankingRepository } from '../src/ranking/mockRanking';
 import { GameScreen } from '../src/screens/GameScreen';
+import { volumeAt } from '../src/components/VolumeBar';
 
 interface FakePlayer extends PlayerLike {
   name: string;
@@ -118,16 +127,58 @@ describe('SoundManager', () => {
     expect(players.bgm_title.play).toHaveBeenCalled();
   });
 
-  it('ミュート中は鳴らさず、解除すると BGM が戻る', () => {
+  it('BGM をオフにすると BGM だけ止まり、効果音は鳴る。オンに戻すと BGM が再開する', () => {
     const { manager, players } = fakeManager();
     manager.load();
     manager.playBgm('bgm_title');
-    manager.setMuted(true);
+    manager.applySettings({ bgmEnabled: false });
     expect(players.bgm_title.pause).toHaveBeenCalled();
+    expect(manager.bgm).toBeNull();
+    manager.playSe('se_drop');
+    expect(players.se_drop.play).toHaveBeenCalledTimes(1);
+    // オフの間に画面が変わっても、戻したときはその画面の曲が流れる
+    manager.playBgm('bgm_game');
+    expect(players.bgm_game.play).not.toHaveBeenCalled();
+    manager.applySettings({ bgmEnabled: true });
+    expect(players.bgm_game.play).toHaveBeenCalledTimes(1);
+    expect(manager.bgm).toBe('bgm_game');
+  });
+
+  it('効果音をオフにすると効果音だけ鳴らなくなり、BGM は流れ続ける', () => {
+    const { manager, players } = fakeManager();
+    manager.load();
+    manager.playBgm('bgm_title');
+    manager.applySettings({ seEnabled: false });
     manager.playSe('se_drop');
     expect(players.se_drop.play).not.toHaveBeenCalled();
-    manager.setMuted(false);
-    expect(players.bgm_title.play).toHaveBeenCalledTimes(2);
+    expect(players.se_drop.pause).toHaveBeenCalled();
+    expect(players.bgm_title.pause).not.toHaveBeenCalled();
+    expect(manager.bgm).toBe('bgm_title');
+  });
+
+  it('音量は BGM と効果音で別々に効き、鳴っている音にもすぐ反映される', () => {
+    const { manager, players } = fakeManager();
+    manager.load();
+    manager.playBgm('bgm_title');
+    manager.applySettings({ bgmVolume: 0.5, seVolume: 1 });
+    expect(players.bgm_title.volume).toBeCloseTo(0.55 * 0.5);
+    expect(players.se_drop.volume).toBeCloseTo(0.7 * 1);
+    expect(players.se_jackpot.volume).toBeCloseTo(1);
+    manager.applySettings({ seVolume: 0.3 });
+    expect(players.se_jackpot.volume).toBeCloseTo(0.3);
+    expect(players.bgm_title.volume).toBeCloseTo(0.55 * 0.5);
+  });
+
+  it('音量 0 は鳴らさないのと同じ', () => {
+    const { manager, players } = fakeManager();
+    manager.load();
+    manager.playBgm('bgm_title');
+    manager.applySettings({ bgmVolume: 0, seVolume: 0 });
+    expect(manager.bgm).toBeNull();
+    manager.playSe('se_drop');
+    expect(players.se_drop.play).not.toHaveBeenCalled();
+    manager.applySettings({ bgmVolume: 0.4 });
+    expect(manager.bgm).toBe('bgm_title');
   });
 
   it('dispose で全部止めて解放し、もう鳴らない', () => {
@@ -161,6 +212,10 @@ describe('SoundManager', () => {
 });
 
 describe('画面と音', () => {
+  // 前のテストで保存された音の設定が残らないようにする
+  beforeEach(() => AsyncStorage.clear());
+  afterEach(() => jest.useRealTimers());
+
   it('起動するとタイトル BGM が流れ、スタートでゲーム BGM に切り替わる', async () => {
     const { manager, players } = fakeManager();
     await render(<App rankingRepository={new MockRankingRepository()} soundManager={manager} />);
@@ -170,18 +225,53 @@ describe('画面と音', () => {
     expect(players.bgm_game.play).toHaveBeenCalled();
   });
 
-  it('サウンドのオン・オフを切り替えられる', async () => {
+  it('サウンド設定で BGM と効果音を別々に切り替え、音量を変えられる', async () => {
     const { manager, players } = fakeManager();
     await render(<App rankingRepository={new MockRankingRepository()} soundManager={manager} />);
-    await fireEvent.press(screen.getByTestId('sound-toggle'));
-    expect(manager.isMuted).toBe(true);
-    expect(screen.getByText('🔇 音なし')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('sound-settings-open'));
+    expect(screen.getByTestId('sound-settings')).toBeTruthy();
+
+    // BGM をオフ → タイトル BGM が止まる。効果音はオンのまま
+    await fireEvent.press(screen.getByTestId('bgm-toggle'));
+    expect(manager.getSettings()).toMatchObject({ bgmEnabled: false, seEnabled: true });
     expect(players.bgm_title.pause).toHaveBeenCalled();
-    await fireEvent.press(screen.getByTestId('sound-toggle'));
-    expect(manager.isMuted).toBe(false);
+    expect(screen.getByTestId('bgm-toggle')).toHaveTextContent('OFF');
+    expect(screen.getByTestId('se-toggle')).toHaveTextContent('ON');
+
+    // 効果音の音量ゲージの 30% の位置をタップ → 30%、指を離すと試し鳴らし
+    const bar = screen.getByTestId('se-volume');
+    await fireEvent(bar, 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 200, height: 36 } } });
+    await fireEvent(bar, 'responderGrant', { nativeEvent: { locationX: 60 } });
+    expect(manager.getSettings().seVolume).toBeCloseTo(0.3);
+    expect(screen.getByText('30%')).toBeTruthy();
+    await fireEvent(bar, 'responderRelease');
+    expect(players.se_perfect_4.play).toHaveBeenCalled();
+
+    // 両方オフにするとボタンが 🔇 になる
+    await fireEvent.press(screen.getByTestId('se-toggle'));
+    await fireEvent.press(screen.getByTestId('sound-settings-close'));
+    expect(screen.queryByTestId('sound-settings')).toBeNull();
+    expect(screen.getByTestId('sound-settings-open')).toHaveTextContent('🔇 サウンド');
+  });
+
+  it('音の設定は端末に保存され、次に起動したときも使われる', async () => {
+    await AsyncStorage.clear();
+    const first = fakeManager();
+    const view = await render(<App rankingRepository={new MockRankingRepository()} soundManager={first.manager} />);
+    await fireEvent.press(screen.getByTestId('sound-settings-open'));
+    await fireEvent.press(screen.getByTestId('se-toggle'));
+    await act(async () => {});
+    await view.unmount();
+    await expect(loadSoundSettings()).resolves.toMatchObject({ seEnabled: false, bgmEnabled: true });
+
+    const second = fakeManager();
+    await render(<App rankingRepository={new MockRankingRepository()} soundManager={second.manager} />);
+    await waitFor(() => expect(second.manager.getSettings().seEnabled).toBe(false));
   });
 
   it('タップでカラメル投下音が鳴る', async () => {
+    // ゲームのループ（requestAnimationFrame）が勝手に進まないよう、時計を止めておく
+    jest.useFakeTimers();
     const { manager, players } = fakeManager();
     await render(
       <SoundProvider manager={manager}>
@@ -195,6 +285,7 @@ describe('画面と音', () => {
     // 落下中の連打では鳴らない
     await fireEvent(area, 'responderGrant');
     expect(players.se_drop.play).toHaveBeenCalledTimes(1);
+    jest.useRealTimers();
   });
 
   it('画面を閉じると音を解放する', async () => {
@@ -202,5 +293,37 @@ describe('画面と音', () => {
     const view = await render(<App rankingRepository={new MockRankingRepository()} soundManager={manager} />);
     await view.unmount();
     expect(players.bgm_title.remove).toHaveBeenCalled();
+  });
+});
+
+describe('音の設定の値', () => {
+  beforeEach(() => AsyncStorage.clear());
+
+  it('音量は 0〜1 の 0.1 刻みにそろえる', () => {
+    expect(clampVolume(0.47)).toBe(0.5);
+    expect(clampVolume(-1)).toBe(0);
+    expect(clampVolume(3)).toBe(1);
+    expect(clampVolume(Number.NaN)).toBe(0);
+  });
+
+  it('ゲージの位置から音量を求める', () => {
+    expect(volumeAt(0, 200)).toBe(0);
+    expect(volumeAt(100, 200)).toBe(0.5);
+    expect(volumeAt(250, 200)).toBe(1);
+    expect(volumeAt(-5, 200)).toBe(0);
+    expect(volumeAt(10, 0)).toBe(0);
+  });
+
+  it('壊れた保存データは初期値に直す', async () => {
+    expect(sanitizeSettings(null)).toEqual(DEFAULT_SOUND_SETTINGS);
+    expect(sanitizeSettings({ bgmEnabled: 'yes', seVolume: 9 })).toEqual({ ...DEFAULT_SOUND_SETTINGS, seVolume: 1 });
+    await AsyncStorage.setItem('caramel-just-meet/sound-settings/v1', '{broken');
+    await expect(loadSoundSettings()).resolves.toEqual(DEFAULT_SOUND_SETTINGS);
+  });
+
+  it('保存して読み出せる', async () => {
+    const s = { bgmEnabled: false, bgmVolume: 0.3, seEnabled: true, seVolume: 1 };
+    await saveSoundSettings(s);
+    await expect(loadSoundSettings()).resolves.toEqual(s);
   });
 });

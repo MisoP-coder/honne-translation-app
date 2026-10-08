@@ -1,12 +1,14 @@
-import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, type ReactNode, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 
+import { loadSoundSettings, saveSoundSettings, type SoundSettings } from './settings';
 import { SoundManager } from './SoundManager';
 
 interface SoundContextValue {
   manager: SoundManager;
-  muted: boolean;
-  setMuted: (muted: boolean) => void;
+  settings: SoundSettings;
+  /** BGM / 効果音のオン・オフや音量を変える（端末に保存される） */
+  updateSettings: (next: Partial<SoundSettings>) => void;
 }
 
 const SoundContext = createContext<SoundContextValue | null>(null);
@@ -20,10 +22,21 @@ interface Props {
 /** アプリ全体で 1 つの SoundManager を持ち、起動時に読み込み、終了時に解放する */
 export function SoundProvider({ children, manager: injected }: Props) {
   const manager = useMemo(() => injected ?? new SoundManager(), [injected]);
-  const [muted, setMutedState] = useState(manager.isMuted);
+  const [settings, setSettings] = useState<SoundSettings>(manager.getSettings());
+  const touchedRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     manager.load();
+    // 前回の音の設定を読み込む（読み込み中に変えられていたら、そちらを優先）
+    let touched = false;
+    let alive = true;
+    loadSoundSettings().then((saved) => {
+      if (!alive || touched) return;
+      setSettings(manager.applySettings(saved));
+    });
+    touchedRef.current = () => {
+      touched = true;
+    };
     // ブラウザは最初に画面に触れるまで音を出せないので、最初のタッチで BGM を鳴らし直す
     let removeUnlock = () => {};
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
@@ -39,6 +52,7 @@ export function SoundProvider({ children, manager: injected }: Props) {
       };
     }
     return () => {
+      alive = false;
       removeUnlock();
       manager.dispose();
     };
@@ -47,13 +61,15 @@ export function SoundProvider({ children, manager: injected }: Props) {
   const value = useMemo(
     () => ({
       manager,
-      muted,
-      setMuted: (next: boolean) => {
-        manager.setMuted(next);
-        setMutedState(next);
+      settings,
+      updateSettings: (next: Partial<SoundSettings>) => {
+        touchedRef.current();
+        const applied = manager.applySettings(next);
+        setSettings(applied);
+        void saveSoundSettings(applied);
       },
     }),
-    [manager, muted],
+    [manager, settings],
   );
 
   return <SoundContext.Provider value={value}>{children}</SoundContext.Provider>;
@@ -66,9 +82,9 @@ export function useSound(): SoundContextValue | null {
 
 /** 画面が表示されている間、指定した BGM を流す */
 export function useBgm(name: 'bgm_title' | 'bgm_game' | null) {
-  const sound = useSound();
+  // 設定を変えるたびに鳴らし直さないよう、manager だけを見る
+  const manager = useSound()?.manager;
   useEffect(() => {
-    if (!sound) return;
-    if (name) sound.manager.playBgm(name);
-  }, [sound, name]);
+    if (manager && name) manager.playBgm(name);
+  }, [manager, name]);
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useBgm, useSound } from '../audio/SoundContext';
@@ -6,6 +6,7 @@ import { useBgm, useSound } from '../audio/SoundContext';
 import { GameButton } from '../components/GameButton';
 import { OutlinedText } from '../components/OutlinedText';
 import { PuddingArt } from '../components/PuddingArt';
+import { SoundSettingsPanel } from '../components/SoundSettingsPanel';
 import { titleFor } from '../game/titles';
 import type { HighScore } from '../storage/highScore';
 import { colors } from '../theme/colors';
@@ -21,6 +22,9 @@ interface Props {
 export function TitleScreen({ highScore, onStart, onRanking }: Props) {
   const wobble = useRef(new Animated.Value(0)).current;
   const sound = useSound();
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const s = sound?.settings;
+  const silent = s ? !(s.bgmEnabled && s.bgmVolume > 0) && !(s.seEnabled && s.seVolume > 0) : false;
   // 起動したら無駄に壮大な「運命」が流れる
   useBgm('bgm_title');
 
@@ -43,14 +47,13 @@ export function TitleScreen({ highScore, onStart, onRanking }: Props) {
     <View style={styles.root}>
       {sound && (
         <Pressable
-          testID="sound-toggle"
-          accessibilityRole="switch"
-          accessibilityState={{ checked: !sound.muted }}
-          accessibilityLabel="サウンド"
-          onPress={() => sound.setMuted(!sound.muted)}
+          testID="sound-settings-open"
+          accessibilityRole="button"
+          accessibilityLabel="サウンド設定"
+          onPress={() => setSettingsOpen(true)}
           style={styles.soundToggle}
         >
-          <Text style={styles.soundToggleText}>{sound.muted ? '🔇 音なし' : '🔊 音あり'}</Text>
+          <Text style={styles.soundToggleText}>{silent ? '🔇 サウンド' : '🔊 サウンド'}</Text>
         </Pressable>
       )}
       <OutlinedText fill="#E8572A" shadow="#5A1A00" outlineWidth={2} depth={3} style={styles.kicker}>
@@ -87,6 +90,7 @@ export function TitleScreen({ highScore, onStart, onRanking }: Props) {
         <GameButton testID="start" label="スタート" onPress={onStart} />
         <GameButton testID="open-ranking" label="世界ランキング" variant="secondary" onPress={onRanking} />
       </View>
+      {settingsOpen && <SoundSettingsPanel onClose={() => setSettingsOpen(false)} />}
     </View>
   );
 }
