@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -18,6 +19,7 @@ import { OutlinedText } from '../components/OutlinedText';
 import { PuddingArt } from '../components/PuddingArt';
 import { SoundSettingsPanel } from '../components/SoundSettingsPanel';
 import { TitleBackdrop } from '../components/TitleBackdrop';
+import { config } from '../config';
 import { titleFor } from '../game/titles';
 import type { HighScore } from '../storage/highScore';
 import { colors } from '../theme/colors';
@@ -154,9 +156,37 @@ export function TitleScreen({ highScore, onStart, onRanking }: Props) {
           </Animated.View>
           <GameButton testID="open-ranking" label="世界ランキング" variant="secondary" onPress={onRanking} />
         </View>
+
+        <View style={styles.footer}>
+          <FooterLink testID="link-about" path="/about.html" label="遊び方" />
+          <Text style={styles.footerSep}>・</Text>
+          <FooterLink testID="link-privacy" path="/privacy.html" label="プライバシーポリシー" />
+        </View>
       </ScrollView>
       {settingsOpen && <SoundSettingsPanel onClose={() => setSettingsOpen(false)} />}
     </View>
+  );
+}
+
+/**
+ * 遊び方・プライバシーポリシーのページへのリンク。
+ * ブラウザ版は本物のリンク（<a>）にする。アプリ版は公開サイトの URL があるときだけブラウザで開く。
+ */
+function FooterLink({ path, label, testID }: { path: string; label: string; testID: string }) {
+  const web = Platform.OS === 'web';
+  if (!web && !config.siteUrl) return null;
+  // href は react-native-web だけが解釈する（型定義にはない）
+  const linkProps = web ? { href: path } : {};
+  return (
+    <Text
+      testID={testID}
+      accessibilityRole="link"
+      onPress={web ? undefined : () => void Linking.openURL(`${config.siteUrl}${path}`).catch(() => {})}
+      style={styles.footerLink}
+      {...linkProps}
+    >
+      {label}
+    </Text>
   );
 }
 
@@ -246,6 +276,17 @@ const styles = StyleSheet.create({
   bestText: { fontSize: 14, color: '#FFE600', fontWeight: '900' },
   bestTitle: { fontSize: 12, color: '#FFFFFF', marginTop: 1, fontWeight: '700' },
   buttons: { flexShrink: 0, marginTop: 20, gap: 14, alignItems: 'center' },
+  footer: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', marginTop: 16 },
+  // 背景がにぎやかなので、影を付けて読みやすくする
+  footerLink: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textDecorationLine: 'underline',
+    textShadowColor: 'rgba(90,30,0,0.85)',
+    textShadowRadius: 3,
+  },
+  footerSep: { fontSize: 12, color: '#FFFFFF', marginHorizontal: 6 },
   buttonsCompact: { marginTop: 14, gap: 10 },
   tapHint: {
     flexShrink: 0,
