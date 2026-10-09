@@ -37,21 +37,23 @@ npm run typecheck  # 型チェック
    - 公開キー（`anon` または `publishable`）。**`service_role` / `secret` キーは絶対に使わない。**
 
 ### 2. Cloudflare Pages（サイトの置き場）
-1. [dash.cloudflare.com](https://dash.cloudflare.com) で **Workers & Pages → Create → Pages → Connect to Git**、この GitHub リポジトリを選ぶ。
-2. ビルドの設定
-   | 項目 | 値 |
-   | --- | --- |
-   | Production branch | `main` |
-   | Framework preset | None |
-   | Build command | `npm run build:web` |
-   | Build output directory | `dist` |
-   | Root directory（Advanced） | `caramel-just-meet` |
-3. **Environment variables**（Production）に入れる（`.env.example` を参照）。
-   - `EXPO_PUBLIC_SUPABASE_URL` = Project URL
-   - `EXPO_PUBLIC_SUPABASE_ANON_KEY` = 公開キー
-   - `EXPO_PUBLIC_SITE_URL` = 公開する URL（例 `https://caramel.misop-craft.com`）。**Cloudflare では必ず入れる**（シェア用カードの画像 URL に使う）
-4. **Save and Deploy**。Node.js のバージョンは `.node-version`（22）で決まる。環境変数を変えたら、もう一度デプロイしないと反映されない。
-5. キャッシュの設定は `public/_headers`（ビルドで `dist/_headers` にコピーされる）。
+
+GitHub Actions（`.github/workflows/caramel-cloudflare-pages.yml`）が、main の `caramel-just-meet/` が更新されるたびに
+テスト → ビルド → Cloudflare Pages へのアップロード（`wrangler pages deploy`）を行います。
+Cloudflare の画面で GitHub とつなぐ方法は、スマホの Chrome ではポップアップの関係でつながらなかったため使っていません。
+
+1. Cloudflare で API トークンを作る：右上の人のアイコン → **プロフィール** → **API トークン** → **トークンを作成** → **カスタム トークン**
+   - 権限：**アカウント** / **Cloudflare Pages** / **編集**
+   - アカウント リソース：**含む** / 自分のアカウント
+2. Cloudflare のアカウント ID を控える（ダッシュボードの URL の `dash.cloudflare.com/` の直後の英数字 32 文字）。
+3. GitHub のリポジトリの **Settings → Secrets and variables → Actions → New repository secret** に入れる。
+   - `CLOUDFLARE_API_TOKEN` = 1 のトークン
+   - `CLOUDFLARE_ACCOUNT_ID` = 2 のアカウント ID
+4. GitHub の **Actions → caramel-just-meet → Cloudflare Pages → Run workflow** で公開する（以後は main が更新されるたびに自動）。
+   最初の 1 回で Pages のプロジェクト `caramel-just-meet` が作られ、`https://caramel-just-meet.pages.dev` で開ける。
+
+Supabase の URL と公開キー、公開 URL はワークフローに直接書いてある（ブラウザに埋め込まれる公開の値なので秘密ではない）。
+変えるときはワークフローの `env` を書き換える。キャッシュの設定は `public/_headers`。
 
 ### 3. 独自ドメイン（お名前.com のサブドメイン）
 1. Pages のプロジェクトで **Custom domains → Set up a custom domain** に `caramel.misop-craft.com` を入れる。
