@@ -27,11 +27,6 @@ env:
   PROJECT_NAME: caramel-just-meet
   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
   CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-  # 以下はブラウザに埋め込まれて誰でも見られる公開の値（秘密ではない）。
-  # Supabase の公開キーは RLS とサーバー側の関数で守られている前提のもの（supabase/schema.sql）。
-  EXPO_PUBLIC_SUPABASE_URL: https://cgvcpgujqoimnstwxuir.supabase.co
-  EXPO_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_lmbX2GZvOrsy96J_QU_j7A_cYpKdoeR
-  EXPO_PUBLIC_SITE_URL: https://caramel.misop-craft.com
 
 jobs:
   deploy:
@@ -40,9 +35,9 @@ jobs:
       run:
         working-directory: caramel-just-meet
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version-file: caramel-just-meet/.node-version
           cache: npm
@@ -52,6 +47,13 @@ jobs:
       - run: npx tsc --noEmit
       - run: npm test -- --ci
       - run: npm run build:web
+        # ビルドのときだけ渡す（テストが公開先の設定に左右されないように）。
+        # どれもブラウザに埋め込まれて誰でも見られる公開の値（秘密ではない）。
+        # Supabase の公開キーは RLS とサーバー側の関数で守られている前提のもの（supabase/schema.sql）。
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: https://cgvcpgujqoimnstwxuir.supabase.co
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_lmbX2GZvOrsy96J_QU_j7A_cYpKdoeR
+          EXPO_PUBLIC_SITE_URL: https://caramel.misop-craft.com
 
       - name: Cloudflare の設定がまだなら知らせる
         if: env.CLOUDFLARE_API_TOKEN == '' || env.CLOUDFLARE_ACCOUNT_ID == ''

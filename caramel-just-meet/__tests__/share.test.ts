@@ -30,7 +30,8 @@ describe('X シェア', () => {
 
   it('X の投稿画面の URL に本文をエンコードして入れる', () => {
     const text = buildShareText(3);
-    const url = buildXShareUrl(text);
+    // ゲームの URL は環境（公開先の設定）で変わるので、ここでは付けずに本文だけを確かめる
+    const url = buildXShareUrl(text, '');
     expect(url.startsWith('https://x.com/intent/tweet?text=')).toBe(true);
     expect(url).not.toContain('#');
     expect(url).not.toContain(' ');
