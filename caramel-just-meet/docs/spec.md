@@ -275,7 +275,9 @@ caramel-just-meet/
 ├── supabase/schema.sql        ランキングのテーブルと関数
 ├── public/                    ブラウザ版の HTML（OGP）・シェア画像・アイコン
 ├── scripts/postbuild-web.mjs  ブラウザ版のビルド後に OGP の URL を埋める
-├── vercel.json                Vercel の設定
+├── public/_headers            Cloudflare Pages のキャッシュ設定（公開先）
+├── .node-version              ビルドに使う Node.js のバージョン
+├── vercel.json                Vercel の設定（Vercel に戻すとき用）
 ├── assets/sounds/            自作の BGM・効果音（scripts/generate_sounds.py で作る）
 └── __tests__/                 テスト（Jest + React Native Testing Library）
 ```
