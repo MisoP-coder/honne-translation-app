@@ -1,0 +1,58 @@
+# misop-craft.com のトップページ（misop-craft-site/）を GitHub Pages に公開する。
+# Google AdSense はサイトをトップレベルのドメインで登録するので、ここに確認タグと ads.txt を置く。
+#
+# 最初に 1 回だけ必要な設定
+#   GitHub の Settings → Pages → Build and deployment の Source を「GitHub Actions」にする
+#   同じ画面の Custom domain に misop-craft.com を入れる
+#   お名前.com で misop-craft.com（ホスト名は空）に GitHub Pages の A レコードを 4 つ足す
+# AdSense のパブリッシャー ID は、ゲームと同じ Variables の ADSENSE_CLIENT を使う（未設定なら入れない）。
+name: misop-craft.com → GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'misop-craft-site/**'
+      - '.github/workflows/misop-craft-site.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: misop-craft-site
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: ページを用意する（AdSense の設定があれば確認タグと ads.txt を入れる）
+        env:
+          ADSENSE_CLIENT: ${{ vars.ADSENSE_CLIENT }}
+        run: |
+          cp -r misop-craft-site _site
+          if [[ "$ADSENSE_CLIENT" =~ ^ca-pub-[0-9]{10,20}$ ]]; then
+            tags="<meta name=\"google-adsense-account\" content=\"$ADSENSE_CLIENT\">\n<script async src=\"https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=$ADSENSE_CLIENT\" crossorigin=\"anonymous\"></script>\n</head>"
+            for f in _site/*.html; do sed -i "s#</head>#$tags#" "$f"; done
+            # このサイトとサブドメイン（ゲーム）で広告を売ってよい相手の宣言。f08c47fec0942fa0 は Google の固定の ID
+            printf 'google.com, %s, DIRECT, f08c47fec0942fa0\nsubdomain=caramel.misop-craft.com\n' "${ADSENSE_CLIENT#ca-}" > _site/ads.txt
+            echo "AdSense = $ADSENSE_CLIENT（ads.txt を作成）"
+          else
+            echo "::notice::ADSENSE_CLIENT が未設定なので、AdSense のタグと ads.txt は入れません"
+          fi
+          ls -la _site
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
