@@ -54,6 +54,11 @@ jobs:
           EXPO_PUBLIC_SUPABASE_URL: https://cgvcpgujqoimnstwxuir.supabase.co
           EXPO_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_lmbX2GZvOrsy96J_QU_j7A_cYpKdoeR
           EXPO_PUBLIC_SITE_URL: https://caramel.misop-craft.com
+          # Google AdSense（GitHub の Settings → Secrets and variables → Actions → Variables で設定）。
+          # 未設定なら広告は出さない。どれもブラウザに埋め込まれる公開の値
+          EXPO_PUBLIC_ADSENSE_CLIENT: ${{ vars.ADSENSE_CLIENT }}
+          EXPO_PUBLIC_ADSENSE_SLOT_RANKING: ${{ vars.ADSENSE_SLOT_RANKING }}
+          EXPO_PUBLIC_ADSENSE_SLOT_GAMEOVER: ${{ vars.ADSENSE_SLOT_GAMEOVER }}
 
       - name: Cloudflare の設定がまだなら知らせる
         if: env.CLOUDFLARE_API_TOKEN == '' || env.CLOUDFLARE_ACCOUNT_ID == ''

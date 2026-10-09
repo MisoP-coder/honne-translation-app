@@ -1,14 +1,20 @@
 import { useEffect, useRef } from 'react';
-import { Animated, Platform, StyleSheet, Text, View } from 'react-native';
+import { Animated, Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { titleFor } from '../game/titles';
+import { config } from '../config';
 import { buildShareText, buildXShareUrl } from '../share/xShare';
 import { colors } from '../theme/colors';
 import { useJitter } from '../hooks/useJitter';
+import { AdBanner } from './AdBanner';
 import { GameButton } from './GameButton';
 import { OutlinedText } from './OutlinedText';
 
 const USE_NATIVE_DRIVER = Platform.OS !== 'web';
+/** この高さ以上の画面でだけ、結果の下に広告を出す（低い画面ではボタンと近すぎて誤って押されやすいので出さない） */
+export const AD_MIN_HEIGHT = 760;
+/** 広告を出すまでの待ち時間。直前までプレイで連打していた指が、出てきた広告を押さないように */
+export const AD_DELAY_MS = 1200;
 
 interface Props {
   score: number;
@@ -35,6 +41,7 @@ export function GameOverPanel({
 }: Props) {
   const enter = useRef(new Animated.Value(0)).current;
   const jitter = useJitter(true, 3.5, 220);
+  const { height } = useWindowDimensions();
 
   useEffect(() => {
     Animated.spring(enter, {
@@ -95,6 +102,7 @@ export function GameOverPanel({
           <GameButton testID="to-title" label="タイトルへ" variant="secondary" onPress={onTitle} />
         </View>
       </Animated.View>
+      {height >= AD_MIN_HEIGHT && <AdBanner slot={config.adSlotGameOver} delayMs={AD_DELAY_MS} testID="ad-game-over" />}
     </View>
   );
 }

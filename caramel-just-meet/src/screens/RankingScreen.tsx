@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { useBgm } from '../audio/SoundContext';
+import { AdBanner } from '../components/AdBanner';
 import { GameButton } from '../components/GameButton';
+import { config } from '../config';
 import { NAME_MAX, type PlayerProfile, sanitizeName } from '../ranking/player';
 import {
   type RankedEntry,
@@ -125,6 +127,9 @@ export function RankingScreen({ repository, best, player, onRegister, onBack }: 
         // 登録すると名前と公開 ID が変わるので、上の useEffect が読み込み直す
         onRegister={onRegister}
       />
+
+      {/* 広告は「もどる」ボタンから離して置く（誤って押されないように） */}
+      <AdBanner slot={config.adSlotRanking} testID="ad-ranking" />
 
       <GameButton testID="ranking-back" label="もどる" variant="secondary" onPress={onBack} />
     </View>

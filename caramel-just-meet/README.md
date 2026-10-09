@@ -73,6 +73,20 @@ cp .env.example .env   # 値を入れる（.env は git に入らない）
 npm run build:web      # dist/ にできる
 ```
 
+### 広告（Google AdSense）
+
+ブラウザ版だけ、ランキング画面と（縦に十分長い画面の）ゲームオーバー画面の下に、小さなバナー広告を出します。プレイ中には出しません。
+GitHub の **Settings → Secrets and variables → Actions → Variables** に次を入れると、次の公開から広告が入ります（未設定なら出ません）。
+
+| 名前 | 値 |
+| --- | --- |
+| `ADSENSE_CLIENT` | パブリッシャー ID（`ca-pub-` から始まる） |
+| `ADSENSE_SLOT_RANKING` | ランキング画面用の広告ユニットの ID（数字） |
+| `ADSENSE_SLOT_GAMEOVER` | ゲームオーバー画面用の広告ユニットの ID（数字） |
+
+`ADSENSE_CLIENT` を入れると、ビルドで `index.html` に AdSense の確認タグと読み込みスクリプトが入り、`ads.txt` も作られます（`scripts/postbuild-web.mjs`）。
+プライバシーポリシーは `public/privacy.html`、遊び方のページは `public/about.html`。
+
 ### 運営メモ
 - よくない名前は Supabase の **Table Editor → caramel_scores** から行を消す。
 - ありえない点数はサーバーで弾くが、ずるを完全に防ぐことはできない。
