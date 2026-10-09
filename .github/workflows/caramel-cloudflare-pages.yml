@@ -1,0 +1,71 @@
+# カラメル乗せゲーム（caramel-just-meet/）を Cloudflare Pages に公開する。
+# Cloudflare の画面で GitHub とつなぐ代わりに、main が更新されたら GitHub がビルドして
+# Cloudflare に直接アップロードする（wrangler pages deploy）。
+#
+# 必要な設定（GitHub の Settings → Secrets and variables → Actions → Secrets）
+#   CLOUDFLARE_API_TOKEN  : Cloudflare の API トークン（権限：Account / Cloudflare Pages / Edit）
+#   CLOUDFLARE_ACCOUNT_ID : Cloudflare のアカウント ID
+# どちらかが未設定のあいだは、ビルドとテストだけして公開はしない。
+name: caramel-just-meet → Cloudflare Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'caramel-just-meet/**'
+      - '.github/workflows/caramel-cloudflare-pages.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: caramel-cloudflare-pages
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PROJECT_NAME: caramel-just-meet
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  # 以下はブラウザに埋め込まれて誰でも見られる公開の値（秘密ではない）。
+  # Supabase の公開キーは RLS とサーバー側の関数で守られている前提のもの（supabase/schema.sql）。
+  EXPO_PUBLIC_SUPABASE_URL: https://cgvcpgujqoimnstwxuir.supabase.co
+  EXPO_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_lmbX2GZvOrsy96J_QU_j7A_cYpKdoeR
+  EXPO_PUBLIC_SITE_URL: https://caramel.misop-craft.com
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: caramel-just-meet
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: caramel-just-meet/.node-version
+          cache: npm
+          cache-dependency-path: caramel-just-meet/package-lock.json
+
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm test -- --ci
+      - run: npm run build:web
+
+      - name: Cloudflare の設定がまだなら知らせる
+        if: env.CLOUDFLARE_API_TOKEN == '' || env.CLOUDFLARE_ACCOUNT_ID == ''
+        run: echo "::warning::CLOUDFLARE_API_TOKEN と CLOUDFLARE_ACCOUNT_ID を設定すると、Cloudflare Pages に公開されます（今回はビルドとテストだけ）。"
+
+      - name: Pages のプロジェクトを作る（2 回目以降は作成済みなので何もしない）
+        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
+        run: |
+          if npx --yes wrangler@4 pages project list | grep -q "$PROJECT_NAME"; then
+            echo "プロジェクト $PROJECT_NAME は作成済み"
+          else
+            npx --yes wrangler@4 pages project create "$PROJECT_NAME" --production-branch=main
+          fi
+
+      - name: Cloudflare Pages に公開
+        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
+        run: npx --yes wrangler@4 pages deploy dist --project-name="$PROJECT_NAME" --branch=main --commit-hash="$GITHUB_SHA" --commit-dirty=true
