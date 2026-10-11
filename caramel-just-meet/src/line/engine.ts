@@ -184,19 +184,35 @@ export const OJISAN_PADDING_X = 10;
 export const OJISAN_PADDING_Y = 8;
 export const WORD_FONT_SIZE = 18;
 export const GUCHI_FONT_SIZE = 15;
-export const PHONE_HEIGHT = 78;
+export const PHONE_HEIGHT = 92;
+/** よけるための、カゴの左右に残す余裕（px） */
+export const DODGE_MARGIN = 14;
 
-/** テキストの種類ごとの大きさ（吹き出しの幅と高さ） */
-export function measureItem(kind: ItemKind, text: string, fieldWidth: number): { w: number; h: number } {
+/** ゴミがよけられる幅のうち、いちばん広い隙間（カゴの幅＋余裕）を残せる最大の幅 */
+export function maxBlockWidth(fieldWidth: number, basketWidth: number): number {
+  return Math.max(40, fieldWidth - basketWidth - DODGE_MARGIN * 2);
+}
+
+/**
+ * テキストの種類ごとの大きさ（吹き出しの幅と高さ）。
+ * ゴミはどれも、横にカゴが通れる隙間が残る幅までにする（よけられないゴミを作らない）。
+ */
+export function measureItem(
+  kind: ItemKind,
+  text: string,
+  fieldWidth: number,
+  basketWidth = 100,
+): { w: number; h: number } {
+  const cap = maxBlockWidth(fieldWidth, basketWidth);
   switch (kind) {
     case 'word':
       return { w: Math.ceil(textWidth(text) * WORD_FONT_SIZE + 30), h: 42 };
     case 'guchi':
-      return { w: Math.ceil(textWidth(text) * GUCHI_FONT_SIZE + 26), h: 36 };
+      return { w: Math.min(cap, Math.ceil(textWidth(text) * GUCHI_FONT_SIZE + 26)), h: 36 };
     case 'phone':
-      return { w: Math.round(Math.min(fieldWidth * 0.86, 340)), h: PHONE_HEIGHT };
+      return { w: Math.round(Math.min(fieldWidth * 0.86, 340, cap)), h: PHONE_HEIGHT };
     case 'ojisan': {
-      const w = Math.round(Math.min(fieldWidth * 0.64, 250));
+      const w = Math.round(Math.min(fieldWidth * 0.64, 250, cap));
       const perLine = Math.max(4, Math.floor((w - OJISAN_PADDING_X * 2) / OJISAN_FONT_SIZE));
       // 折り返しの位置ずれに備えて 1 割ほど余裕を見る
       const lines = Math.max(1, Math.ceil((textWidth(text) * 1.1) / perLine));
@@ -210,7 +226,36 @@ function pick<T>(list: readonly T[], rng: number): { value: T; rng: number } {
   return { value: list[Math.floor(r.value * list.length) % list.length], rng: r.state };
 }
 
-function spawn(state: LineState, config: LineConfig, kind: ItemKind | null): LineState {
+const blocks = (kind: ItemKind) => kind !== 'word';
+
+/**
+ * 降ってくる途中のゴミの並びに、カゴが通れる隙間（カゴの幅＋左右の余裕）が残っているか。
+ * top〜bottom の高さにかかっているゴミ（カゴの高さぶん上下に広げて見る）の横の範囲を調べる。
+ */
+export function hasDodgeGap(
+  items: readonly Pick<FallingItem, 'kind' | 'x' | 'y' | 'w' | 'h'>[],
+  config: LineConfig,
+  top: number,
+  bottom: number,
+): boolean {
+  const band = config.basketHeight;
+  const spans = items
+    .filter((it) => blocks(it.kind) && it.y - it.h / 2 < bottom + band && it.y + it.h / 2 > top - band)
+    .map((it) => [it.x - it.w / 2, it.x + it.w / 2] as const)
+    .sort((a, b) => a[0] - b[0]);
+  const need = config.basketWidth + DODGE_MARGIN * 2;
+  let edge = 0;
+  for (const [l, r] of spans) {
+    if (l - edge >= need) return true;
+    edge = Math.max(edge, r);
+  }
+  return config.width - edge >= need;
+}
+
+/** 置き場所を探す回数。見つからなければ、そのときは降らせない */
+const PLACE_TRIES = 8;
+
+function spawn(state: LineState, config: LineConfig, kind: ItemKind | null): LineState | null {
   let rng = state.rng;
   let chosen: ItemKind;
   if (kind) {
@@ -226,17 +271,26 @@ function spawn(state: LineState, config: LineConfig, kind: ItemKind | null): Lin
     chosen === 'word' ? CONCLUSION_WORDS : chosen === 'ojisan' ? OJISAN_TEXTS : chosen === 'guchi' ? GUCHI_WORDS : [RAGE_BLOCK_TEXT];
   const t = pick(list, rng);
   rng = t.rng;
-  const { w, h } = measureItem(chosen, t.value, config.width);
-  const rx = nextRandom(rng);
-  rng = rx.state;
-  const x = w / 2 + rx.value * Math.max(0, config.width - w);
-  const rv = nextRandom(rng);
-  rng = rv.state;
+  const { w, h } = measureItem(chosen, t.value, config.width, config.basketWidth);
   const base = fallSpeed(state.time, config.height);
-  const vy =
-    chosen === 'word' ? base * 0.9 : chosen === 'phone' ? base * 1.25 : base * (0.85 + rv.value * 0.3);
-  const item: FallingItem = { id: state.nextId, kind: chosen, text: t.value, x, y: -h / 2, w, h, vy };
-  return { ...state, rng, nextId: state.nextId + 1, items: [...state.items, item] };
+  // ゴミの速さは step で毎フレームそろえる（ここで入れるのは最初の値）。電話ブロックはブチギレ中のおじさん構文と同じ 2 倍速
+  const vy = chosen === 'word' ? base * 0.9 : base;
+  for (let i = 0; i < PLACE_TRIES; i++) {
+    const rx = nextRandom(rng);
+    rng = rx.state;
+    // 幅の広いもの（特大ブロックや、ほかのゴミと並ぶとき）は、左右どちらかの端に寄せると隙間ができる
+    const edge = chosen === 'phone' || i >= PLACE_TRIES - 2;
+    const x = edge
+      ? rx.value < 0.5
+        ? w / 2
+        : config.width - w / 2
+      : w / 2 + rx.value * Math.max(0, config.width - w);
+    const item: FallingItem = { id: state.nextId, kind: chosen, text: t.value, x, y: -h / 2, w, h, vy };
+    if (!blocks(chosen) || hasDodgeGap([...state.items, item], config, -h, 0)) {
+      return { ...state, rng, nextId: state.nextId + 1, items: [...state.items, item] };
+    }
+  }
+  return null;
 }
 
 function overlaps(item: FallingItem, config: LineConfig, basketX: number): boolean {
@@ -279,9 +333,12 @@ export function step(prev: LineState, config: LineConfig, dt: number): LineState
   let rng = s.rng;
   let lastPraise = s.lastPraise;
 
+  const junkSpeed = fallSpeed(s.time, config.height);
   for (const it of items) {
-    const mul = s.rage > 0 && isJunk(it.kind) ? RAGE_SPEED_MULTIPLIER : 1;
-    const moved: FallingItem = { ...it, y: it.y + it.vy * mul * dt };
+    // ゴミはその瞬間の速さで全部そろって落ちる（並び方が変わらないので、降らせたときの隙間がずっと残る）
+    const vy = it.kind === 'word' ? it.vy : junkSpeed;
+    const mul = it.kind === 'phone' || (s.rage > 0 && isJunk(it.kind)) ? RAGE_SPEED_MULTIPLIER : 1;
+    const moved: FallingItem = { ...it, vy, y: it.y + vy * mul * dt };
     if (s.status === 'playing' && overlaps(moved, config, s.basketX)) {
       if (moved.kind === 'word') {
         s.combo += 1;
@@ -350,14 +407,16 @@ export function step(prev: LineState, config: LineConfig, dt: number): LineState
   let next: LineState = s;
   next.spawnTimer -= dt;
   if (next.spawnTimer <= 0) {
-    next = spawn(next, config, null);
+    // よけられる隙間がない並びになるときは、少し待ってから降らせる
+    next = spawn(next, config, null) ?? { ...next, rng: nextRandom(next.rng).state };
     next.spawnTimer = spawnInterval(next.time);
   }
   if (next.rage > 0) {
     next.phoneTimer -= dt;
     if (next.phoneTimer <= 0) {
-      next = spawn(next, config, 'phone');
-      next.phoneTimer = RAGE_PHONE_INTERVAL;
+      const spawned = spawn(next, config, 'phone');
+      next = spawned ?? next;
+      next.phoneTimer = spawned ? RAGE_PHONE_INTERVAL : 0.15;
     }
   }
   next.events = events;

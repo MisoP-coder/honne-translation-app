@@ -9,9 +9,11 @@ import {
   createLineConfig,
   createLineGame,
   type FallingItem,
+  hasDodgeGap,
   type ItemKind,
   type LineState,
   MAX_LIVES,
+  maxBlockWidth,
   measureItem,
   MOOD_PER_CATCH,
   MOOD_PER_PASS,
@@ -118,9 +120,9 @@ describe('要約の達人：エンジン', () => {
     ];
     const normal = step(stateWith(items, { basketX: 200 }), config, 0.1);
     const raging = step(stateWith(items, { basketX: 200, rage: 5, mood: 100 }), config, 0.1);
-    expect(normal.items[0].y - 100).toBeCloseTo(10);
-    expect(raging.items[0].y - 100).toBeCloseTo(10 * RAGE_SPEED_MULTIPLIER);
+    expect(raging.items[0].y - 100).toBeCloseTo((normal.items[0].y - 100) * RAGE_SPEED_MULTIPLIER);
     expect(raging.items[1].y - 100).toBeCloseTo(10);
+    expect(normal.items[1].y - 100).toBeCloseTo(10);
   });
 
   it('ブチギレ中は「今すぐ電話しろ‼️😡🔥」が降ってきて、当たると即ゲームオーバー', () => {
@@ -153,6 +155,34 @@ describe('要約の達人：エンジン', () => {
     expect(s.mood).toBe(0);
     expect(s.items.some((it) => it.kind === 'phone')).toBe(false);
     expect(s.status).toBe('playing');
+  });
+
+  it('どの画面幅でも、ゴミの横には必ずカゴが通れる隙間が残る（ブチギレ中も）', () => {
+    for (const [width, height] of [
+      [320, 520],
+      [390, 600],
+      [768, 900],
+    ]) {
+      const cfg = createLineConfig(width, height);
+      for (const seed of [1, 2, 3, 4, 5]) {
+        // 当たっても終わらないようにして、長い時間（ブチギレを何回もはさんで）流し続ける
+        let s: LineState = { ...createLineGame(seed, cfg), lives: 1e9, basketX: -1000 };
+        let phones = 0;
+        for (let f = 0; f < 60 * 120; f++) {
+          if (f % (60 * 20) === 60 * 8) s = { ...s, rage: RAGE_SECONDS, mood: 100, phoneTimer: RAGE_FIRST_PHONE };
+          s = step({ ...s, lives: 1e9 }, cfg, 1 / 60);
+          for (const it of s.items) {
+            if (it.kind === 'word') continue;
+            if (it.kind === 'phone') phones++;
+            expect(it.w).toBeLessThanOrEqual(maxBlockWidth(width, cfg.basketWidth));
+            if (!hasDodgeGap(s.items, cfg, it.y - it.h / 2, it.y + it.h / 2)) {
+              throw new Error(`隙間がない: width=${width} seed=${seed} frame=${f}`);
+            }
+          }
+        }
+        expect(phones).toBeGreaterThan(0);
+      }
+    }
   });
 
   it('同じシードなら同じ展開になる', () => {

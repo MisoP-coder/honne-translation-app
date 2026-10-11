@@ -8,6 +8,7 @@ import {
   OJISAN_LINE_HEIGHT,
   OJISAN_PADDING_X,
   OJISAN_PADDING_Y,
+  textWidth,
   WORD_FONT_SIZE,
 } from '../engine';
 import { emojiText, lineColors } from '../theme';
@@ -44,8 +45,8 @@ export const FallingText = memo(function FallingText({ item, rage }: Props) {
     case 'phone':
       return (
         <View testID={`item-phone-${item.id}`} style={[styles.base, styles.phone, box]}>
-          <Text style={[emojiText, styles.phoneText]} numberOfLines={1} adjustsFontSizeToFit>
-            {item.text}
+          <Text style={[emojiText, styles.phoneText, phoneFont(item)]} numberOfLines={2}>
+            {phoneLines(item.text).join('\n')}
           </Text>
         </View>
       );
@@ -59,6 +60,20 @@ export const FallingText = memo(function FallingText({ item, rage }: Props) {
       );
   }
 });
+
+/** 特大ブロックの文字は「今すぐ／電話しろ‼️😡🔥」の 2 行にして、大きく見せる */
+function phoneLines(text: string): string[] {
+  const i = text.indexOf('電話');
+  return i > 0 ? [text.slice(0, i), text.slice(i)] : [text];
+}
+
+/** 特大ブロックの文字を、箱に収まる大きさにする（ブラウザでは自動で縮まないので計算する） */
+function phoneFont(item: FallingItem) {
+  const widest = Math.max(...phoneLines(item.text).map(textWidth));
+  // 絵文字は見積もりより広く描かれることがあるので、2 割ほど余裕を見る
+  const fontSize = Math.max(14, Math.min(30, Math.floor((item.w - 32) / (widest * 1.2))));
+  return { fontSize, lineHeight: Math.round(fontSize * 1.2) };
+}
 
 const styles = StyleSheet.create({
   base: { position: 'absolute', justifyContent: 'center', alignItems: 'center' },
@@ -121,5 +136,5 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 0 },
     elevation: 10,
   },
-  phoneText: { fontSize: 28, lineHeight: 38, fontWeight: '900', color: '#FFFFFF' },
+  phoneText: { fontWeight: '900', color: '#FFFFFF', textAlign: 'center' },
 });
