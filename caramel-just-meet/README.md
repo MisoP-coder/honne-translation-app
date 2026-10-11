@@ -3,6 +3,11 @@
 ぷるぷる揺れるプリンの頂点に、タップでカラメルを乗せ続けるゲーム。
 Expo (React Native) + TypeScript。仕様は [docs/spec.md](docs/spec.md)。
 
+同じアプリに、2 本目のゲーム **「要約の達人 〜上司の長文LINEを1文字で読め〜」** も入っています。
+降ってくる上司の長文 LINE（絵文字まみれのおじさん構文）をよけ、【明日休み】【定時退社】などの結論だけを要約カゴでキャッチするゲーム。
+プリンのタイトルの「📱 新作：LINEを要約する」から遊べます（ブラウザ版は `?game=line` でも開ける）。
+仕様は [docs/line_summary_spec.md](docs/line_summary_spec.md)、コードは `src/line/`。
+
 ## 動かし方
 
 ```bash
@@ -23,6 +28,7 @@ npm run typecheck  # 型チェック
 
 `assets/sounds/` の音はすべて `scripts/generate_sounds.py` で合成した自作の音源です（外部の音源は使っていません）。
 作り直すときは `python3 scripts/generate_sounds.py`（numpy が必要）。
+「要約の達人」の音（`assets/sounds/line/`）は `python3 scripts/generate_line_sounds.py` で作っています。
 
 ## 公開する（Cloudflare Pages + Supabase）
 
