@@ -33,11 +33,9 @@ interface Props {
   highScore: HighScore;
   onStart: () => void;
   onRanking: () => void;
-  /** もう 1 つのゲーム「要約の達人」に切り替える（渡されたときだけボタンを出す） */
-  onLineGame?: () => void;
 }
 
-export function TitleScreen({ highScore, onStart, onRanking, onLineGame }: Props) {
+export function TitleScreen({ highScore, onStart, onRanking }: Props) {
   const wobble = useRef(new Animated.Value(0)).current;
   // タイトルとスタートボタンを、どくん…どくん…と脈打たせる
   const pulse = useRef(new Animated.Value(0)).current;
@@ -157,9 +155,6 @@ export function TitleScreen({ highScore, onStart, onRanking, onLineGame }: Props
             <GameButton testID="start" label="スタート" size="large" onPress={onStart} />
           </Animated.View>
           <GameButton testID="open-ranking" label="世界ランキング" variant="secondary" onPress={onRanking} />
-          {onLineGame && (
-            <GameButton testID="open-line-game" label="📱 新作：LINEを要約する" variant="secondary" onPress={onLineGame} />
-          )}
         </View>
 
         <View style={styles.footer}>

@@ -1,0 +1,6 @@
+# Cloudflare Pages 用のキャッシュ設定（vercel.json の headers と同じ内容）
+# ファイル名に中身のハッシュが入っているので、ずっとキャッシュしてよい
+/_expo/static/*
+  Cache-Control: public, max-age=31536000, immutable
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

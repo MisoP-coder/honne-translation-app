@@ -1,0 +1,69 @@
+# 要約の達人（line-summary/）を Cloudflare Pages に公開する。
+# カラメル乗せゲームと同じく、main が更新されたら GitHub がビルドして
+# Cloudflare に直接アップロードする（wrangler pages deploy）。Pages のプロジェクトはゲームごとに別。
+#
+# 必要な設定（GitHub の Settings → Secrets and variables → Actions → Secrets。カラメル乗せゲームと共通）
+#   CLOUDFLARE_API_TOKEN  : Cloudflare の API トークン（権限：Account / Cloudflare Pages / Edit）
+#   CLOUDFLARE_ACCOUNT_ID : Cloudflare のアカウント ID
+# どちらかが未設定のあいだは、ビルドとテストだけして公開はしない。
+name: line-summary → Cloudflare Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'line-summary/**'
+      - '.github/workflows/line-summary-cloudflare-pages.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: line-summary-cloudflare-pages
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PROJECT_NAME: line-summary
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: line-summary
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: line-summary/.node-version
+          cache: npm
+          cache-dependency-path: line-summary/package-lock.json
+
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm test -- --ci
+      - run: npm run build:web
+        env:
+          # X のシェアに付ける公開 URL（ブラウザに埋め込まれる公開の値）。独自ドメインを決めたらここを書き換える
+          EXPO_PUBLIC_SITE_URL: https://line-summary.pages.dev
+
+      - name: Cloudflare の設定がまだなら知らせる
+        if: env.CLOUDFLARE_API_TOKEN == '' || env.CLOUDFLARE_ACCOUNT_ID == ''
+        run: echo "::warning::CLOUDFLARE_API_TOKEN と CLOUDFLARE_ACCOUNT_ID を設定すると、Cloudflare Pages に公開されます（今回はビルドとテストだけ）。"
+
+      - name: Pages のプロジェクトを作る（2 回目以降は作成済みなので何もしない）
+        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
+        run: |
+          if npx --yes wrangler@4 pages project list | grep -q "$PROJECT_NAME"; then
+            echo "プロジェクト $PROJECT_NAME は作成済み"
+          else
+            npx --yes wrangler@4 pages project create "$PROJECT_NAME" --production-branch=main
+          fi
+
+      - name: Cloudflare Pages に公開
+        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
+        run: npx --yes wrangler@4 pages deploy dist --project-name="$PROJECT_NAME" --branch=main --commit-hash="$GITHUB_SHA" --commit-dirty=true
