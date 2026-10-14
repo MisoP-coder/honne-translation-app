@@ -384,7 +384,7 @@ export default function HonneApp({ userEmail, isAnonymous, initialProfiles, init
       }
 
       setRegisterNotice(
-        '確認メールを送りました。差出人「Supabase Auth」の英語のメールですが、このアプリからのものです。中のリンクを、この画面を開いたままのブラウザで開くと登録が完了します。届かない場合は迷惑メールもご確認ください。'
+        '確認メールを送りました。中のリンクを、この画面を開いたままのブラウザで開くと登録が完了します。届かない場合は迷惑メールもご確認ください。'
       );
     } catch (err) {
       setError(translateAuthError(err));
