@@ -102,7 +102,9 @@ export function LineTitleScreen({ highScore, onStart }: Props) {
             🕘 9:00〜18:00 まで耐えれば<Text style={styles.good}>定時退社</Text>！{'\n'}
             吹き出しを<Text style={styles.good}>タップで要約</Text>→ 出てきた結論をカゴでキャッチ{'\n'}
             <Text style={styles.bad}>「明日休み…なんてネ😜」のひっかけ</Text>は要約するとライフ−1{'\n'}
-            結論を見逃すと上司がイライラ → 100% でブチギレ😡
+            結論を見逃すと上司がイライラ → 100% でブチギレ😡{'\n'}
+            <Text style={styles.good}>上のほうで要約するほど ×3</Text>／正解を続けると<Text style={styles.good}>神要約タイム</Text>✨{'\n'}
+            たまに来る金色の👑社長LINE・📱誤爆LINEは大チャンス
           </Text>
         </View>
 

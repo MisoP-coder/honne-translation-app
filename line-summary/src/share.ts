@@ -11,13 +11,16 @@ export interface ShareResult {
   caught: number;
   fakesDodged: number;
   clock: string;
+  /** 神要約タイムに入った回数 */
+  feverCount?: number;
 }
 
 export function shareText(r: ShareResult): string {
   const head = r.cleared
     ? `【定時退社】上司の長文LINEを ${r.caught} 件要約して、18:00 に帰れた🎉`
     : `【残業確定】${r.clock} に上司から着信…📞😡（要約 ${r.caught} 件）`;
-  return `${head}\nひっかけを見抜いた数：${r.fakesDodged}\nスコア ${r.score}／称号「${lineTitleFor(r.score)}」\n#要約の達人`;
+  const fever = r.feverCount ? `／神要約タイム ${r.feverCount} 回✨` : '';
+  return `${head}\nひっかけを見抜いた数：${r.fakesDodged}${fever}\nスコア ${r.score}／称号「${lineTitleFor(r.score)}」\n#要約の達人`;
 }
 
 function siteUrl(): string {

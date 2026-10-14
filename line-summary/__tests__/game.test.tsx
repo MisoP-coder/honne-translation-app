@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react-
 import App from '../App';
 import { cutInOffset, RAGE_FLASH_PERIOD, rageFlashOpacity } from '../src/components/RageOverlay';
 import {
+  BASE_POINTS,
   BubbleType,
   CLEAR_BONUS,
   CLEAR_BONUS_PER_LIFE,
@@ -14,6 +15,11 @@ import {
   DAY_SECONDS,
   FAKE_DODGE_POINTS,
   type FallingItem,
+  FEVER_PER_CATCH,
+  FEVER_SCORE_MULTIPLIER,
+  FEVER_SECONDS,
+  GOBAKU_POINTS,
+  GOLDEN_POINTS,
   hasDodgeGap,
   type ItemKind,
   type LineState,
@@ -27,13 +33,18 @@ import {
   RAGE_FIRST_PHONE,
   RAGE_SECONDS,
   RAGE_SPEED_MULTIPLIER,
+  RARE_FROM,
+  readMultiplier,
   splitConclusion,
   step,
   tapAt,
 } from '../src/game/engine';
 import {
+  BOSS_TEXTS,
+  BOSS_WORDS,
   CONCLUSION_WORDS,
   FAKE_TEXTS,
+  GOBAKU_TEXTS,
   GUCHI_WORDS,
   OJISAN_TEXTS,
   RAGE_BLOCK_TEXT,
@@ -60,6 +71,8 @@ function textFor(s: Spec): string {
   if (s.kind === 'word') return '明日休み';
   if (s.kind === 'guchi') return '説教';
   if (s.kind === 'phone') return RAGE_BLOCK_TEXT;
+  if (s.bubble === 'boss') return BOSS_TEXTS[0];
+  if (s.bubble === 'gobaku') return GOBAKU_TEXTS[0];
   return s.bubble === 'real' ? REAL_TEXTS[0] : s.bubble === 'fake' ? FAKE_TEXTS[0] : OJISAN_TEXTS[0];
 }
 
@@ -108,9 +121,17 @@ describe('テキストのデータ', () => {
   });
 
   it('結論なしの吹き出しと愚痴には、結論の単語が入っていない', () => {
-    for (const t of [...OJISAN_TEXTS, ...GUCHI_WORDS]) {
+    for (const t of [...OJISAN_TEXTS, ...GUCHI_WORDS, ...GOBAKU_TEXTS]) {
       expect(t).not.toMatch(/[{}]/);
       for (const w of CONCLUSION_WORDS) expect(t).not.toContain(w);
+    }
+  });
+
+  it('社長からの LINE には、金の結論がちょうど 1 つ入っている', () => {
+    for (const t of BOSS_TEXTS) {
+      const parts = splitConclusion(t).filter((p) => p.conclusion);
+      expect(parts).toHaveLength(1);
+      expect(BOSS_WORDS).toContain(parts[0].text as (typeof BOSS_WORDS)[number]);
     }
   });
 
@@ -285,6 +306,134 @@ describe('1 日の業務（9:00〜18:00）', () => {
     };
     expect(run()).toEqual(run());
     expect(run().length).toBeGreaterThan(0);
+  });
+});
+
+describe('即読ボーナス', () => {
+  it('上のほうで要約するほど倍率が高い（×3／×2／×1）', () => {
+    expect(readMultiplier(config.basketTop * 0.1, config)).toBe(3);
+    expect(readMultiplier(config.basketTop * 0.5, config)).toBe(2);
+    expect(readMultiplier(config.basketTop * 0.8, config)).toBe(1);
+  });
+
+  it('上のほうで要約した結論は、キャッチしたときの点が 3 倍', () => {
+    const y = config.basketTop * 0.15;
+    let s = tapAt(stateWith([{ kind: 'bubble', bubble: 'real', y }]), config, config.width / 2, y);
+    const word = s.items.find((it) => it.kind === 'word');
+    expect(word?.mult).toBe(3);
+    expect(s.quickReads).toBe(1);
+    expect(s.events).toContainEqual(expect.objectContaining({ type: 'quick-read', mult: 3 }));
+    s = step({ ...s, items: s.items.map((it) => ({ ...it, x: s.basketX, y: config.basketTop })) }, config, 1 / 60);
+    expect(s.score).toBe(BASE_POINTS * 3);
+  });
+});
+
+describe('レア LINE', () => {
+  it('誤爆 LINE を回収すると、すぐにボーナスが入る（即読の倍率もかかる）', () => {
+    const y = config.basketTop * 0.8;
+    const s = tapAt(stateWith([{ kind: 'bubble', bubble: 'gobaku', y }]), config, config.width / 2, y);
+    expect(s.score).toBe(GOBAKU_POINTS);
+    expect(s.rares).toBe(1);
+    expect(s.lives).toBe(MAX_LIVES);
+    expect(s.events).toContainEqual(expect.objectContaining({ type: 'rare', kind: 'gobaku' }));
+  });
+
+  it('社長からの LINE を要約すると、金の結論が出て大量の点になる', () => {
+    const y = config.basketTop * 0.8;
+    let s = tapAt(stateWith([{ kind: 'bubble', bubble: 'boss', y }]), config, config.width / 2, y);
+    const word = s.items.find((it) => it.kind === 'word');
+    expect(word?.golden).toBe(true);
+    expect(BOSS_WORDS).toContain(word?.text as (typeof BOSS_WORDS)[number]);
+    s = step({ ...s, items: s.items.map((it) => ({ ...it, x: s.basketX, y: config.basketTop })) }, config, 1 / 60);
+    expect(s.score).toBe(GOLDEN_POINTS);
+  });
+
+  it('レア LINE は 10 秒を過ぎてから、画面に 1 つまで', () => {
+    let seen = 0;
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      let s: LineState = { ...createLineGame(seed, config), lives: 1e9, basketX: -1000 };
+      for (let f = 0; f < 60 * DAY_SECONDS && s.status === 'playing'; f++) {
+        s = step({ ...s, lives: 1e9 }, config, 1 / 60);
+        const rares = s.items.filter((it) => it.bubble === 'boss' || it.bubble === 'gobaku');
+        expect(rares.length).toBeLessThanOrEqual(1);
+        if (rares.length > 0) {
+          expect(Math.min(...rares.map((r) => r.born))).toBeGreaterThanOrEqual(RARE_FROM);
+          seen++;
+        }
+      }
+    }
+    // 8 日分流せば、どこかでレア LINE が来ている
+    expect(seen).toBeGreaterThan(0);
+  });
+});
+
+describe('神要約フィーバー', () => {
+  /** 結論をキャッチする直前の状態 */
+  const catching = (patch: Partial<LineState>) => stateWith([{ kind: 'word', y: config.basketTop }], patch);
+
+  it('正解を続けてゲージが満タンになると、神要約タイムが始まりゴミが一掃される', () => {
+    const s = step(
+      stateWith(
+        [
+          { kind: 'word', y: config.basketTop },
+          { kind: 'bubble', bubble: 'fake', x: 70, y: 100 },
+          { kind: 'guchi', x: 300, y: 200 },
+          { kind: 'bubble', bubble: 'real', x: 300, y: 50 },
+        ],
+        { fever: 100 - FEVER_PER_CATCH },
+      ),
+      config,
+      1 / 60,
+    );
+    expect(s.feverTime).toBe(FEVER_SECONDS);
+    expect(s.feverCount).toBe(1);
+    expect(s.events).toContainEqual({ type: 'fever-start' });
+    expect(s.items.some((it) => it.bubble === 'fake' || it.kind === 'guchi')).toBe(false);
+    expect(s.items.some((it) => it.bubble === 'real')).toBe(true);
+  });
+
+  it('神要約タイム中は点が 3 倍、吹き出しに当たってもライフが減らず、そのまま要約される', () => {
+    let s = step(catching({ feverTime: 5, fever: 100 }), config, 1 / 60);
+    expect(s.score).toBe(BASE_POINTS * FEVER_SCORE_MULTIPLIER);
+    s = step(stateWith([{ kind: 'bubble', bubble: 'real', y: config.basketTop }], { feverTime: 5, fever: 100 }), config, 1 / 60);
+    expect(s.lives).toBe(MAX_LIVES);
+    expect(s.items.some((it) => it.kind === 'word')).toBe(true);
+  });
+
+  it('神要約タイム中は本物（と社長）しか降ってこない', () => {
+    let s: LineState = { ...stateWith([], { feverTime: FEVER_SECONDS, fever: 100, spawnTimer: 0 }), basketX: -1000 };
+    let spawned = 0;
+    for (let f = 0; f < 60 * 7; f++) {
+      s = step({ ...s, feverTime: Math.max(s.feverTime, 1) }, config, 1 / 60);
+      for (const it of s.items) {
+        if (it.kind === 'bubble') expect(['real', 'boss']).toContain(it.bubble);
+      }
+      spawned = Math.max(spawned, s.items.filter((it) => it.kind === 'bubble').length);
+    }
+    expect(spawned).toBeGreaterThan(0);
+  });
+
+  it('神要約タイムが終わると、残った本物の吹き出しは全部要約されて結論がカゴへ飛ぶ', () => {
+    const s = step(stateWith([{ kind: 'bubble', bubble: 'real', x: 80, y: 100 }], { feverTime: 0.01, fever: 100 }), config, 1 / 60);
+    expect(s.feverTime).toBe(0);
+    expect(s.fever).toBe(0);
+    expect(s.events).toContainEqual({ type: 'fever-end' });
+    expect(s.items.some((it) => it.kind === 'bubble')).toBe(false);
+    expect(s.items.some((it) => it.kind === 'word')).toBe(true);
+  });
+
+  it('ミスをするとゲージが半分になる', () => {
+    const s = tapAt(stateWith([{ kind: 'bubble', bubble: 'none', y: 200 }], { fever: 80 }), config, config.width / 2, 200);
+    expect(s.fever).toBe(40);
+  });
+
+  it('ブチギレ中は始まらず、ブチギレが収まったら始まる', () => {
+    let s = step(catching({ fever: 95, rage: 3, mood: 100 }), config, 1 / 60);
+    expect(s.fever).toBe(100);
+    expect(s.feverTime).toBe(0);
+    s = step({ ...s, rage: 0.01 }, config, 1 / 60);
+    expect(s.events).toContainEqual({ type: 'rage-end' });
+    expect(s.feverTime).toBe(FEVER_SECONDS);
   });
 });
 

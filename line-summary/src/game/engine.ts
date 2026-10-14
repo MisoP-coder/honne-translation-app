@@ -10,11 +10,16 @@
  *   - 結論なし → 上司のイライラ度が上がる
  * - 吹き出しや愚痴がカゴに当たると、全文まともに読まされてライフ −1
  * - 9:00 に始まり、18:00（約 60 秒）まで耐えれば「定時退社」でクリア
+ * - 即読ボーナス：画面の上のほうで要約するほど点が高い（×3／×2／×1）
+ * - 神要約フィーバー：正しく要約・見抜きを続けるとゲージがたまり、満タンで「神要約タイム」（本物だけが降り、点は 3 倍）
+ * - レア LINE：たまに金色の吹き出し（社長からの LINE・上司の誤爆 LINE）が来る。要約すると大量の点
  */
 import { nextRandom } from './rng';
 import {
+  BOSS_TEXTS,
   CONCLUSION_WORDS,
   FAKE_TEXTS,
+  GOBAKU_TEXTS,
   GUCHI_WORDS,
   OJISAN_TEXTS,
   PRAISE_MIN_COMBO,
@@ -25,8 +30,15 @@ import {
 
 /** bubble：上司の長文 LINE／guchi：短い愚痴（よけるだけ）／phone：ブチギレ中の即死ブロック／word：要約して出てきた結論 */
 export type ItemKind = 'bubble' | 'guchi' | 'phone' | 'word';
-/** 吹き出しの中身。real：本物の結論あり／fake：ひっかけ／none：結論なし */
-export type BubbleType = 'real' | 'fake' | 'none';
+/**
+ * 吹き出しの中身。real：本物の結論あり／fake：ひっかけ／none：結論なし
+ * boss：社長からの LINE（レア。金の結論が出る）／gobaku：上司の誤爆 LINE（レア。回収するとボーナス）
+ */
+export type BubbleType = 'real' | 'fake' | 'none' | 'boss' | 'gobaku';
+/** レアな吹き出しか */
+export const isRare = (t: BubbleType | undefined) => t === 'boss' || t === 'gobaku';
+/** 結論が出てくる吹き出しか */
+const hasConclusion = (t: BubbleType | undefined) => t === 'real' || t === 'boss';
 
 export interface FallingItem {
   id: number;
@@ -43,6 +55,10 @@ export interface FallingItem {
   bubble?: BubbleType;
   /** 出てきた時刻（飛び出す演出に使う） */
   born: number;
+  /** 飛び出した結論：即読ボーナスの倍率（要約したときの高さで決まる） */
+  mult?: number;
+  /** 飛び出した結論：社長からの金の結論 */
+  golden?: boolean;
 }
 
 /** キャッチした場所に浮かぶ「+120」など */
@@ -72,6 +88,10 @@ export type LineEvent =
   | { type: 'hit'; id: number; lives: number }
   | { type: 'overlook'; id: number }
   | { type: 'fake-dodged'; id: number }
+  | { type: 'quick-read'; id: number; mult: number }
+  | { type: 'rare'; id: number; kind: 'boss' | 'gobaku' }
+  | { type: 'fever-start' }
+  | { type: 'fever-end' }
   | { type: 'rage-start' }
   | { type: 'rage-end' }
   | { type: 'clear' }
@@ -122,6 +142,15 @@ export interface LineState {
   overReason: GameOverReason | null;
   /** 定時退社のボーナス（クリアしたときだけ） */
   clearBonus: number;
+  /** 神要約ゲージ（0〜100） */
+  fever: number;
+  /** 神要約タイムの残り秒数。0 なら通常 */
+  feverTime: number;
+  feverCount: number;
+  /** 即読（×2 以上）で要約した回数 */
+  quickReads: number;
+  /** レア LINE を要約した回数 */
+  rares: number;
 }
 
 export const MAX_LIVES = 3;
@@ -168,6 +197,27 @@ export const TAP_SLOP = 10;
 export const WORD_HOMING = 300;
 /** 飛び出した結論の落ちる速さ（吹き出しの何倍か） */
 export const WORD_FALL = 2.4;
+/** 即読ボーナス：カゴの上端までの高さに対して、この割合より上で要約すると ×3、次の割合より上で ×2 */
+export const READ_TIERS: readonly { until: number; mult: number; label: string }[] = [
+  { until: 0.34, mult: 3, label: '即読' },
+  { until: 0.6, mult: 2, label: '速読' },
+];
+/** 神要約タイムの長さ（秒）と、そのあいだの得点の倍率 */
+export const FEVER_SECONDS = 8;
+export const FEVER_SCORE_MULTIPLIER = 3;
+/** 神要約ゲージのたまり方 */
+export const FEVER_PER_CATCH = 10;
+export const FEVER_PER_QUICK = 5;
+export const FEVER_PER_DODGE = 10;
+export const FEVER_PER_RARE = 20;
+/** 神要約タイム中の降ってくる間隔（秒） */
+export const FEVER_SPAWN_INTERVAL = 0.8;
+/** 社長の金の結論の点、誤爆 LINE を回収した点（どちらも即読ボーナスがかかる） */
+export const GOLDEN_POINTS = 500;
+export const GOBAKU_POINTS = 600;
+/** レア LINE が出始める時刻（秒）と、1 回降らせるときにレアになる確率 */
+export const RARE_FROM = 10;
+export const RARE_RATE = 0.06;
 const FLOATER_SECONDS = 0.9;
 const BURST_SECONDS = 0.6;
 
@@ -205,6 +255,11 @@ export function createLineGame(seed: number, config?: LineConfig): LineState {
     lastPraise: null,
     overReason: null,
     clearBonus: 0,
+    fever: 0,
+    feverTime: 0,
+    feverCount: 0,
+    quickReads: 0,
+    rares: 0,
   };
 }
 
@@ -215,6 +270,13 @@ export function clockLabel(time: number): string {
   const h = DAY_START_HOUR + Math.floor(minutes / 60);
   const m = minutes % 60;
   return `${h}:${String(m).padStart(2, '0')}`;
+}
+
+/** 即読ボーナス：吹き出しの中心の高さから倍率を決める（上のほうほど高い） */
+export function readMultiplier(y: number, config: LineConfig): number {
+  const r = y / Math.max(1, config.basketTop);
+  for (const t of READ_TIERS) if (r < t.until) return t.mult;
+  return 1;
 }
 
 /** 要約カゴを x（中心）に動かす。画面からはみ出さないようにする */
@@ -364,8 +426,26 @@ const PLACE_TRIES = 8;
 
 type SpawnKind = { kind: 'bubble'; bubble: BubbleType } | { kind: 'guchi' } | { kind: 'phone' };
 
-/** 次に降らせるものを選ぶ（本物 40%・ひっかけ 20%・結論なし 25%・愚痴 15%。最初はひっかけなし） */
-function chooseSpawn(time: number, rng: number): { spawn: SpawnKind; rng: number } {
+/**
+ * 次に降らせるものを選ぶ（本物 40%・ひっかけ 20%・結論なし 25%・愚痴 15%。最初はひっかけなし）。
+ * 10 秒を過ぎると、6% でレア LINE（社長・誤爆が半々）。画面にレアが残っているあいだは出さない。
+ * 神要約タイム中は本物だけ（ときどき社長）。
+ */
+function chooseSpawn(state: LineState, rng: number): { spawn: SpawnKind; rng: number } {
+  const time = state.time;
+  const rareOnScreen = state.items.some((it) => isRare(it.bubble));
+  if (state.feverTime > 0) {
+    const r = nextRandom(rng);
+    const boss = !rareOnScreen && r.value < 0.12;
+    return { spawn: { kind: 'bubble', bubble: boss ? 'boss' : 'real' }, rng: r.state };
+  }
+  if (time >= RARE_FROM && !rareOnScreen) {
+    const rr = nextRandom(rng);
+    rng = rr.state;
+    if (rr.value < RARE_RATE) {
+      return { spawn: { kind: 'bubble', bubble: rr.value < RARE_RATE / 2 ? 'boss' : 'gobaku' }, rng };
+    }
+  }
   const r = nextRandom(rng);
   const fake = time < NO_FAKE_UNTIL ? 0 : 0.2;
   const real = 0.4;
@@ -382,7 +462,18 @@ function chooseSpawn(time: number, rng: number): { spawn: SpawnKind; rng: number
 function textsFor(spawn: SpawnKind): readonly string[] {
   if (spawn.kind === 'guchi') return GUCHI_WORDS;
   if (spawn.kind === 'phone') return [RAGE_BLOCK_TEXT];
-  return spawn.bubble === 'real' ? REAL_TEXTS : spawn.bubble === 'fake' ? FAKE_TEXTS : OJISAN_TEXTS;
+  switch (spawn.bubble) {
+    case 'real':
+      return REAL_TEXTS;
+    case 'fake':
+      return FAKE_TEXTS;
+    case 'boss':
+      return BOSS_TEXTS;
+    case 'gobaku':
+      return GOBAKU_TEXTS;
+    default:
+      return OJISAN_TEXTS;
+  }
 }
 
 function spawn(state: LineState, config: LineConfig, forced: SpawnKind | null): LineState | null {
@@ -391,7 +482,7 @@ function spawn(state: LineState, config: LineConfig, forced: SpawnKind | null): 
   if (forced) {
     what = forced;
   } else {
-    const c = chooseSpawn(state.time, rng);
+    const c = chooseSpawn(state, rng);
     what = c.spawn;
     rng = c.rng;
   }
@@ -445,7 +536,8 @@ function overlaps(item: FallingItem, config: LineConfig, basketX: number): boole
 
 /** イライラ度を上げる。100% になったらブチギレ（ブチギレ中は動かない） */
 function addMood(s: LineState, amount: number, events: LineEvent[]): void {
-  if (s.rage > 0 || s.status !== 'playing') return;
+  // ブチギレ中と神要約タイム中は動かない
+  if (s.rage > 0 || s.feverTime > 0 || s.status !== 'playing') return;
   s.mood = Math.min(MOOD_MAX, Math.max(0, s.mood + amount));
   if (s.mood >= MOOD_MAX) {
     s.rage = RAGE_SECONDS;
@@ -455,7 +547,64 @@ function addMood(s: LineState, amount: number, events: LineEvent[]): void {
   }
 }
 
+/** 神要約ゲージをためる（神要約タイム中は動かない）。満タンになったら、ブチギレ中でなければ神要約タイムへ */
+function addFever(s: LineState, amount: number, events: LineEvent[]): void {
+  if (s.feverTime > 0 || s.status !== 'playing') return;
+  s.fever = Math.min(100, Math.max(0, s.fever + amount));
+  maybeStartFever(s, events);
+}
+
+function maybeStartFever(s: LineState, events: LineEvent[]): void {
+  if (s.fever < 100 || s.feverTime > 0 || s.rage > 0 || s.status !== 'playing') return;
+  s.fever = 100;
+  s.feverTime = FEVER_SECONDS;
+  s.feverCount += 1;
+  s.spawnTimer = 0.2;
+  events.push({ type: 'fever-start' });
+}
+
+/** 神要約タイムが始まったら、ゴミ（愚痴・ひっかけ・結論なし）を一掃して、本物だけが降る画面にする */
+function sweepForFever(s: LineState, events: LineEvent[]): void {
+  if (!events.some((e) => e.type === 'fever-start')) return;
+  const swept = s.items.filter(
+    (it) => it.kind === 'guchi' || (it.kind === 'bubble' && (it.bubble === 'fake' || it.bubble === 'none')),
+  );
+  if (swept.length === 0) return;
+  s.bursts = [...s.bursts, ...swept.map((it) => ({ id: it.id, x: it.x, y: it.y, type: 'none' as BubbleType, age: 0 }))];
+  s.items = s.items.filter((it) => !swept.includes(it));
+}
+
+/** ミスをしたら神要約ゲージが半分になる */
+function halveFever(s: LineState): void {
+  if (s.feverTime > 0) return;
+  s.fever = Math.floor(s.fever / 2);
+}
+
+/** 吹き出しから飛び出す結論を作る（次の id を使う） */
+function popWord(s: LineState, config: LineConfig, from: FallingItem, mult: number): FallingItem {
+  const golden = from.bubble === 'boss';
+  const word = conclusionOf(from.text) ?? CONCLUSION_WORDS[0];
+  const { w, h } = measureItem('word', word, config.width, config.basketWidth);
+  const x0 = Math.min(config.width - w / 2, Math.max(w / 2, from.x));
+  const item: FallingItem = {
+    id: s.nextId,
+    kind: 'word',
+    text: word,
+    x: x0,
+    y: from.y,
+    w,
+    h,
+    vy: fallSpeed(s.time, config.height) * WORD_FALL,
+    born: s.time,
+    mult,
+    golden,
+  };
+  s.nextId += 1;
+  return item;
+}
+
 function loseLife(s: LineState, events: LineEvent[], id: number): void {
+  halveFever(s);
   s.lives = Math.max(0, s.lives - 1);
   s.combo = 0;
   s.lastHitAt = s.time;
@@ -485,36 +634,44 @@ export function tapAt(prev: LineState, config: LineConfig, x: number, y: number)
   const s: LineState = { ...prev, events: [] };
   const events: LineEvent[] = [];
   const type = target.bubble ?? 'none';
+  const mult = readMultiplier(target.y, config);
+  const tierLabel = READ_TIERS.find((t) => t.mult === mult)?.label;
   s.items = prev.items.filter((it) => it.id !== target.id);
   s.bursts = [...prev.bursts, { id: target.id, x: target.x, y: target.y, type, age: 0 }];
   events.push({ type: 'summarize', id: target.id, result: type });
-  if (type === 'real') {
-    // 結論の単語が吹き出しから飛び出して、カゴに向かって落ちてくる
-    const word = conclusionOf(target.text) ?? CONCLUSION_WORDS[0];
-    const { w, h } = measureItem('word', word, config.width, config.basketWidth);
-    const x0 = Math.min(config.width - w / 2, Math.max(w / 2, target.x));
-    s.items.push({
-      id: s.nextId,
-      kind: 'word',
-      text: word,
-      x: x0,
-      y: target.y,
-      w,
-      h,
-      vy: fallSpeed(s.time, config.height) * WORD_FALL,
-      born: s.time,
-    });
-    s.nextId += 1;
+  if (hasConclusion(type)) {
+    // 結論の単語が吹き出しから飛び出して、カゴに向かって落ちてくる（即読の倍率を持っていく）
+    s.items.push(popWord(s, config, target, mult));
+    if (type === 'boss') {
+      s.rares += 1;
+      events.push({ type: 'rare', id: target.id, kind: 'boss' });
+    }
+    if (mult > 1) {
+      s.quickReads += 1;
+      s.floaters = [...s.floaters, { id: target.id, x: target.x, y: target.y - 18, text: `${tierLabel} ×${mult}!`, tone: 'good', age: 0 }];
+      events.push({ type: 'quick-read', id: target.id, mult });
+    }
+  } else if (type === 'gobaku') {
+    // 誤爆 LINE を回収した
+    const points = GOBAKU_POINTS * mult * (s.feverTime > 0 ? FEVER_SCORE_MULTIPLIER : 1);
+    s.score += points;
+    s.rares += 1;
+    s.floaters = [...s.floaters, { id: target.id, x: target.x, y: target.y, text: `誤爆回収 +${points}`, tone: 'good', age: 0 }];
+    events.push({ type: 'rare', id: target.id, kind: 'gobaku' });
+    addFever(s, FEVER_PER_RARE, events);
   } else if (type === 'fake') {
+    halveFever(s);
     s.fakesTaken += 1;
     s.floaters = [...s.floaters, { id: target.id, x: target.x, y: target.y, text: 'ひっかけ！', tone: 'bad', age: 0 }];
     addMood(s, MOOD_FAKE, events);
     loseLife(s, events, target.id);
   } else {
     s.combo = 0;
+    halveFever(s);
     s.floaters = [...s.floaters, { id: target.id, x: target.x, y: target.y, text: '結論なし', tone: 'bad', age: 0 }];
     addMood(s, MOOD_NONE, events);
   }
+  sweepForFever(s, events);
   if (s.status === 'over') events.push({ type: 'gameover', reason: s.overReason ?? 'lives' });
   s.events = events;
   return s;
@@ -526,22 +683,41 @@ export function step(prev: LineState, config: LineConfig, dt: number): LineState
   const s: LineState = { ...prev, time: prev.time + dt, events: [] };
   const events: LineEvent[] = [];
 
+  // 神要約タイムの残り時間。終わったら、残っている本物の吹き出しを全部要約してカゴへ飛ばす
+  if (s.feverTime > 0) {
+    s.feverTime = Math.max(0, s.feverTime - dt);
+    if (s.feverTime === 0) {
+      s.fever = 0;
+      const leftovers = s.items.filter((it) => it.kind === 'bubble' && hasConclusion(it.bubble));
+      s.items = s.items.filter((it) => !leftovers.includes(it));
+      for (const it of leftovers) {
+        s.bursts = [...s.bursts, { id: it.id, x: it.x, y: it.y, type: it.bubble ?? 'real', age: 0 }];
+        s.items.push(popWord(s, config, it, 1));
+      }
+      events.push({ type: 'fever-end' });
+    }
+  }
+
   // ブチギレの残り時間。耐え抜いたらゲージを 0 に戻して通常モードへ
-  let items = prev.items;
+  let items = s.items;
   if (s.rage > 0) {
     s.rage = Math.max(0, s.rage - dt);
     if (s.rage === 0) {
       s.mood = 0;
       items = items.filter((it) => it.kind !== 'phone');
       events.push({ type: 'rage-end' });
+      // ブチギレ中に神要約ゲージが満タンになっていたら、ここで始まる（ゴミの一掃はこのフレームの最後）
+      maybeStartFever(s, events);
     }
   }
 
   const kept: FallingItem[] = [];
-  const floaters = prev.floaters
+  /** ループの途中で飛び出した結論（神要約タイム中にカゴに当たった吹き出し）。次のフレームから動かす */
+  const popped: FallingItem[] = [];
+  const floaters = s.floaters
     .map((f) => ({ ...f, age: f.age + dt }))
     .filter((f) => f.age < FLOATER_SECONDS);
-  s.bursts = prev.bursts.map((b) => ({ ...b, age: b.age + dt })).filter((b) => b.age < BURST_SECONDS);
+  s.bursts = s.bursts.map((b) => ({ ...b, age: b.age + dt })).filter((b) => b.age < BURST_SECONDS);
   let rng = s.rng;
   let lastPraise = s.lastPraise;
   // ゴミはその瞬間の速さで全部そろって落ちる（並び方が変わらないので、降らせたときの隙間がずっと残る）
@@ -558,13 +734,26 @@ export function step(prev: LineState, config: LineConfig, dt: number): LineState
     }
     const moved: FallingItem = { ...it, x, vy, y: it.y + vy * mul * dt };
     if (s.status === 'playing' && overlaps(moved, config, s.basketX)) {
+      if (moved.kind === 'bubble' && s.feverTime > 0) {
+        // 神要約タイム中は、カゴに当たった吹き出しもそのまま要約される（ダメージなし）
+        s.bursts = [...s.bursts, { id: moved.id, x: moved.x, y: moved.y, type: moved.bubble ?? 'real', age: 0 }];
+        if (hasConclusion(moved.bubble)) popped.push(popWord(s, config, { ...moved, y: config.basketTop - 30 }, 1));
+        continue;
+      }
       if (moved.kind === 'word') {
         s.combo += 1;
         s.maxCombo = Math.max(s.maxCombo, s.combo);
         s.caught += 1;
-        const points = (BASE_POINTS + COMBO_BONUS * (s.combo - 1)) * (s.rage > 0 ? RAGE_SCORE_MULTIPLIER : 1);
+        const mult = moved.mult ?? 1;
+        const base = moved.golden ? GOLDEN_POINTS : BASE_POINTS + COMBO_BONUS * (s.combo - 1);
+        const points =
+          base *
+          mult *
+          (s.rage > 0 ? RAGE_SCORE_MULTIPLIER : 1) *
+          (s.feverTime > 0 ? FEVER_SCORE_MULTIPLIER : 1);
         s.score += points;
         if (s.rage === 0) s.mood = Math.max(0, s.mood - MOOD_PER_CATCH);
+        addFever(s, FEVER_PER_CATCH + FEVER_PER_QUICK * (mult - 1), events);
         s.lastCatchAt = s.time;
         let praise: string | null = null;
         if (s.combo >= PRAISE_MIN_COMBO) {
@@ -591,9 +780,10 @@ export function step(prev: LineState, config: LineConfig, dt: number): LineState
       if (moved.kind === 'word') {
         s.combo = 0;
         addMood(s, MOOD_WORD_DROP, events);
-      } else if (moved.kind === 'bubble' && moved.bubble === 'real') {
+      } else if (moved.kind === 'bubble' && hasConclusion(moved.bubble) && s.feverTime === 0) {
         // 結論があったのに読まずに流した
         s.combo = 0;
+        halveFever(s);
         floaters.push({ id: moved.id, x: moved.x, y: config.height - 30, text: '見逃し！', tone: 'bad', age: 0 });
         events.push({ type: 'overlook', id: moved.id });
         addMood(s, MOOD_OVERLOOK, events);
@@ -601,6 +791,7 @@ export function step(prev: LineState, config: LineConfig, dt: number): LineState
         // ひっかけを見抜いて見送った
         s.fakesDodged += 1;
         s.score += FAKE_DODGE_POINTS;
+        addFever(s, FEVER_PER_DODGE, events);
         floaters.push({ id: moved.id, x: moved.x, y: config.height - 30, text: `見抜いた +${FAKE_DODGE_POINTS}`, tone: 'good', age: 0 });
         events.push({ type: 'fake-dodged', id: moved.id });
       }
@@ -608,7 +799,8 @@ export function step(prev: LineState, config: LineConfig, dt: number): LineState
     }
     kept.push(moved);
   }
-  s.items = kept;
+  s.items = [...kept, ...popped];
+  sweepForFever(s, events);
   s.floaters = floaters;
   s.rng = rng;
   s.lastPraise = lastPraise;
@@ -636,7 +828,7 @@ export function step(prev: LineState, config: LineConfig, dt: number): LineState
   if (next.spawnTimer <= 0) {
     // よけられる隙間がない並びになるときは、少し待ってから降らせる
     next = spawn(next, config, null) ?? { ...next, rng: nextRandom(next.rng).state };
-    next.spawnTimer = spawnInterval(next.time);
+    next.spawnTimer = next.feverTime > 0 ? FEVER_SPAWN_INTERVAL : spawnInterval(next.time);
   }
   if (next.rage > 0) {
     next.phoneTimer -= dt;
@@ -652,10 +844,10 @@ export function step(prev: LineState, config: LineConfig, dt: number): LineState
 
 /** スコアに応じた称号（結果画面に出す） */
 export function lineTitleFor(score: number): string {
-  if (score >= 9000) return '伝説の要約神';
-  if (score >= 6000) return '社長室直通の要約マン';
-  if (score >= 4000) return '定時退社の申し子';
-  if (score >= 2500) return '既読の達人';
-  if (score >= 1000) return '行間読み見習い';
+  if (score >= 60000) return '伝説の要約神';
+  if (score >= 30000) return '社長室直通の要約マン';
+  if (score >= 15000) return '定時退社の申し子';
+  if (score >= 6000) return '既読の達人';
+  if (score >= 2000) return '行間読み見習い';
   return '長文に溺れし者';
 }

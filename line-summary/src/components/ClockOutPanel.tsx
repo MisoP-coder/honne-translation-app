@@ -16,6 +16,9 @@ interface Props {
   fakesDodged: number;
   maxCombo: number;
   lives: number;
+  feverCount: number;
+  quickReads: number;
+  rares: number;
   bestScore: number;
   isNewRecord: boolean;
   onRetry: () => void;
@@ -37,7 +40,14 @@ export function ClockOutPanel(p: Props) {
   }, [stamp]);
 
   const stampScale = stamp.interpolate({ inputRange: [0, 1], outputRange: [3, 1] });
-  const share: ShareResult = { cleared: true, score: p.score, caught: p.caught, fakesDodged: p.fakesDodged, clock: '18:00' };
+  const share: ShareResult = {
+    cleared: true,
+    score: p.score,
+    caught: p.caught,
+    fakesDodged: p.fakesDodged,
+    clock: '18:00',
+    feverCount: p.feverCount,
+  };
   const url = shareUrl(share);
 
   return (
@@ -58,6 +68,9 @@ export function ClockOutPanel(p: Props) {
           <Row label="　うち定時ボーナス" value={`+${p.clearBonus}`} />
           <Row label="要約した結論" value={`${p.caught} 件`} />
           <Row label="見抜いたひっかけ" value={`${p.fakesDodged} 件`} />
+          <Row label="即読（×2以上）" value={`${p.quickReads} 回`} />
+          <Row label="神要約タイム" value={`${p.feverCount} 回`} />
+          <Row label="レアLINE" value={`${p.rares} 件`} />
           <Row label="最高コンボ" value={String(p.maxCombo)} />
           <Row label="ハイスコア" value={String(Math.max(p.score, p.bestScore))} />
           <Text style={styles.rank}>称号：{lineTitleFor(p.score)}</Text>

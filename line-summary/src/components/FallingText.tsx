@@ -8,6 +8,7 @@ import {
   BUBBLE_PADDING_Y,
   type FallingItem,
   GUCHI_FONT_SIZE,
+  isRare,
   splitConclusion,
   textWidth,
   WORD_FONT_SIZE,
@@ -39,11 +40,23 @@ export const FallingText = memo(function FallingText({ item, rage, time }: Props
       return (
         <View
           testID={`item-word-${item.id}`}
-          style={[styles.base, styles.word, box, { transform: [{ scale: wordPopScale(time - item.born) }] }]}
+          style={[
+            styles.base,
+            styles.word,
+            item.golden && styles.wordGolden,
+            box,
+            { transform: [{ scale: wordPopScale(time - item.born) }] },
+          ]}
         >
-          <Text style={[emojiText, styles.wordText]} numberOfLines={1}>
+          <Text style={[emojiText, styles.wordText, item.golden && styles.wordTextGolden]} numberOfLines={1}>
             {item.text}
           </Text>
+          {/* 即読ボーナスの倍率 */}
+          {(item.mult ?? 1) > 1 && (
+            <View style={[styles.multBadge, item.mult === 3 && styles.multBadge3]}>
+              <Text style={styles.multText}>×{item.mult}</Text>
+            </View>
+          )}
         </View>
       );
     case 'guchi':
@@ -62,9 +75,20 @@ export const FallingText = memo(function FallingText({ item, rage, time }: Props
           </Text>
         </View>
       );
-    case 'bubble':
+    case 'bubble': {
+      const rare = isRare(item.bubble);
       return (
-        <View testID={`item-bubble-${item.id}`} style={[styles.base, styles.bubble, rage && styles.bubbleRage, box]}>
+        <View
+          testID={`item-bubble-${item.id}`}
+          style={[
+            styles.base,
+            styles.bubble,
+            rage && styles.bubbleRage,
+            item.bubble === 'boss' && styles.bubbleBoss,
+            item.bubble === 'gobaku' && styles.bubbleGobaku,
+            box,
+          ]}
+        >
           {/* 結論の単語には蛍光ペン。本物もひっかけも同じ見た目なので、前後を読んで見抜く */}
           <Text style={[emojiText, styles.bubbleText]}>
             {splitConclusion(item.text).map((part, i) =>
@@ -78,9 +102,23 @@ export const FallingText = memo(function FallingText({ item, rage, time }: Props
             )}
           </Text>
           {/* 吹き出しのしっぽ */}
-          <View style={[styles.tail, rage && styles.tailRage]} />
+          <View
+            style={[
+              styles.tail,
+              rage && styles.tailRage,
+              item.bubble === 'boss' && styles.tailBoss,
+              item.bubble === 'gobaku' && styles.tailGobaku,
+            ]}
+          />
+          {/* レア LINE の目印 */}
+          {rare && (
+            <View style={[styles.rareBadge, item.bubble === 'gobaku' && styles.rareBadgeGobaku]}>
+              <Text style={[emojiText, styles.rareBadgeText]}>{item.bubble === 'boss' ? '👑 社長からLINE' : '📱 誤爆？'}</Text>
+            </View>
+          )}
         </View>
       );
+    }
   }
 });
 
@@ -112,6 +150,21 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   wordText: { fontSize: WORD_FONT_SIZE, lineHeight: WORD_FONT_SIZE + 6, fontWeight: '900', color: lineColors.wordText },
+  wordGolden: { backgroundColor: '#FFB800', borderColor: '#FFF6C0', shadowColor: '#FFB800', shadowRadius: 16 },
+  wordTextGolden: { color: '#5A1A00' },
+  multBadge: {
+    position: 'absolute',
+    right: -12,
+    top: -12,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 999,
+    backgroundColor: '#FF8A1A',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  multBadge3: { backgroundColor: '#D0002A' },
+  multText: { fontSize: 13, fontWeight: '900', color: '#FFFFFF', fontStyle: 'italic' },
   guchi: {
     borderRadius: 8,
     backgroundColor: lineColors.guchi,
@@ -131,6 +184,39 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(0,0,0,0.12)',
   },
   bubbleRage: { backgroundColor: '#FFD9DE', borderColor: lineColors.danger, borderWidth: 2 },
+  bubbleBoss: {
+    backgroundColor: '#FFF4C2',
+    borderColor: '#FFB800',
+    borderWidth: 3,
+    shadowColor: '#FFB800',
+    shadowOpacity: 1,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 8,
+  },
+  bubbleGobaku: {
+    backgroundColor: '#FFE3F1',
+    borderColor: '#FFB800',
+    borderWidth: 3,
+    shadowColor: '#FF6FB5',
+    shadowOpacity: 1,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 8,
+  },
+  rareBadge: {
+    position: 'absolute',
+    top: -13,
+    right: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 1,
+    borderRadius: 999,
+    backgroundColor: '#FFB800',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  rareBadgeGobaku: { backgroundColor: '#FF6FB5' },
+  rareBadgeText: { fontSize: 11, lineHeight: 16, fontWeight: '900', color: '#FFFFFF' },
   bubbleText: {
     fontSize: BUBBLE_FONT_SIZE,
     lineHeight: BUBBLE_LINE_HEIGHT,
@@ -148,6 +234,8 @@ const styles = StyleSheet.create({
     transform: [{ rotate: '45deg' }],
   },
   tailRage: { backgroundColor: '#FFD9DE' },
+  tailBoss: { backgroundColor: '#FFF4C2' },
+  tailGobaku: { backgroundColor: '#FFE3F1' },
   phone: {
     borderRadius: 16,
     backgroundColor: lineColors.danger,

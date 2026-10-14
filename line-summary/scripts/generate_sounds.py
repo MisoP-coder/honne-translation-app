@@ -15,6 +15,8 @@
   - line_tear.wav      : 吹き出しを要約した「ビリッ…チョキン！」
   - line_none.wav      : 結論のない吹き出しを要約してしまった「ポコッ」
   - line_clear.wav     : 18:00 になって定時退社「パッパラパー！」＋退勤の鐘
+  - line_fever.wav     : 神要約タイム突入「キュインキュインキュイン…ジャーン！」（パチンコの確変風）
+  - line_rare.wav      : レア LINE を要約「チャリリリーン！」（コインが降ってくる音）
 
 使い方:  python3 scripts/generate_sounds.py   （numpy が必要）
 """
@@ -272,6 +274,34 @@ def se_clear() -> np.ndarray:
     return normalize(fade(reverb(out, 1.4, 0.25)[: len(out)], 0.002, 0.3), 0.85)
 
 
+def se_fever() -> np.ndarray:
+    """神要約タイム突入：うなりが 3 回せり上がって、長調の和音が「ジャーン！」"""
+    out = np.zeros(int(2.4 * SR))
+    for k in range(3):
+        dur = 0.22
+        t = t_axis(dur)
+        f = (600 + k * 250) * ((3400 + k * 300) / (600 + k * 250)) ** (t / dur)
+        ph = 2 * np.pi * np.cumsum(f) / SR
+        sweep = (np.sin(ph) + 0.4 * np.sin(2 * ph)) * np.clip(t / 0.01, 0, 1) * np.clip((dur - t) / 0.04, 0, 1)
+        place(out, sweep * 0.45, k * 0.2)
+    for n in ['C5', 'E5', 'G5', 'C6']:
+        place(out, brass(note_freq(n), 1.0, 0.35), 0.66)
+    for i, n in enumerate(['C6', 'E6', 'G6', 'C7', 'E7']):
+        place(out, bell(note_freq(n), 1.4, 0.3, ratios=(1, 2, 3), decays=(3, 5, 7)), 0.66 + i * 0.05)
+    place(out, cymbal(1.6, 0.35), 0.66)
+    return normalize(fade(reverb(out, 1.2, 0.22)[: len(out)], 0.002, 0.3), 0.9)
+
+
+def se_rare() -> np.ndarray:
+    """レア LINE「チャリリリーン！」：高いコインの音が駆け上がる"""
+    out = np.zeros(int(1.3 * SR))
+    notes = ['E6', 'G6', 'B6', 'E7', 'G7', 'B7']
+    for i, n in enumerate(notes):
+        place(out, fm_ping(note_freq(n), 0.5, 0.45, 2.0, 2.0), i * 0.06)
+    place(out, bell(note_freq('E7'), 0.9, 0.35, ratios=(1, 2.4, 3.9), decays=(4, 6, 8)), 0.4)
+    return normalize(fade(reverb(out, 0.8, 0.2)[: len(out)]), 0.8)
+
+
 def main() -> None:
     write('line_bgm_title.wav', bgm_line_title())
     write('line_bgm_game.wav', bgm_line_game())
@@ -285,6 +315,8 @@ def main() -> None:
     write('line_tear.wav', se_tear())
     write('line_none.wav', se_none())
     write('line_clear.wav', se_clear())
+    write('line_fever.wav', se_fever())
+    write('line_rare.wav', se_rare())
 
 
 if __name__ == '__main__':

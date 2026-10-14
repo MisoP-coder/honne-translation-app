@@ -14,6 +14,8 @@ import {
 
 import { ClockOutPanel } from '../components/ClockOutPanel';
 import { FallingText } from '../components/FallingText';
+import { FeverGauge } from '../components/FeverGauge';
+import { HaloBackdrop } from '../components/HaloBackdrop';
 import { IncomingCall } from '../components/IncomingCall';
 import { MoodGauge } from '../components/MoodGauge';
 import { PraisePopup } from '../components/PraisePopup';
@@ -25,11 +27,13 @@ import {
   createLineConfig,
   createLineGame,
   DAY_SECONDS,
+  FEVER_SECONDS,
   type LineConfig,
   type LineEvent,
   type LineState,
   MAX_LIVES,
   moveBasket,
+  READ_TIERS,
   RUSH_FROM,
   step,
   tapAt,
@@ -72,7 +76,15 @@ interface Props {
 export function soundsFor(ev: LineEvent): SoundName[] {
   switch (ev.type) {
     case 'summarize':
-      return ev.result === 'real' ? ['se_tear'] : ev.result === 'none' ? ['se_none'] : [];
+      return ev.result === 'real' || ev.result === 'boss' ? ['se_tear'] : ev.result === 'none' ? ['se_none'] : [];
+    case 'quick-read':
+      return ev.mult >= 3 ? ['se_praise'] : [];
+    case 'rare':
+      return ['se_rare'];
+    case 'fever-start':
+      return ['se_fever'];
+    case 'fever-end':
+      return ['se_calm'];
     case 'catch':
       return catchSounds(ev.combo);
     case 'hit':
@@ -112,7 +124,8 @@ export function LineGameScreen({ bestScore, onGameOver, onRetry, onTitle, seed }
   const sound = useSound();
   const soundRef = useRef(sound);
   soundRef.current = sound;
-  useBgm(game.status === 'playing' ? 'bgm_game' : null);
+  // 神要約タイム中は、大当たり風のタイトルの曲に切り替える
+  useBgm(game.status !== 'playing' ? null : game.feverTime > 0 ? 'bgm_title' : 'bgm_game');
 
   useEffect(() => {
     let alive = true;
@@ -263,9 +276,10 @@ export function LineGameScreen({ bestScore, onGameOver, onRetry, onTitle, seed }
   const showCalm = !raging && game.time - calmAt < CALM_SECONDS;
   const rush = game.time >= RUSH_FROM && game.status === 'playing';
   const dayProgress = Math.min(1, game.time / DAY_SECONDS);
+  const fever = game.feverTime > 0;
 
   return (
-    <View style={[styles.root, raging && styles.rootRage]} testID="line-game">
+    <View style={[styles.root, raging && styles.rootRage, fever && styles.rootFever]} testID="line-game">
       {/* 上部：時計・スコア・ライフ・イライラ度ゲージ */}
       <View style={styles.hud}>
         <View style={styles.hudRow}>
@@ -290,13 +304,29 @@ export function LineGameScreen({ bestScore, onGameOver, onRetry, onTitle, seed }
           </Pressable>
         </View>
         <MoodGauge mood={game.mood} rage={game.rage} blink={blink} />
+        <FeverGauge fever={game.fever} feverTime={game.feverTime} time={game.time} />
       </View>
 
       {/* 遊ぶ場所 */}
       <View ref={fieldRef} style={styles.field} onLayout={onLayout} {...pan.panHandlers} testID="line-field">
+        {/* 神要約タイム：大当たりの後光 */}
+        {config && fever && (
+          <View style={[StyleSheet.absoluteFill, styles.feverBack]} pointerEvents="none" testID="fever-backdrop">
+            <HaloBackdrop width={config.width} height={config.height} centerYRatio={0.4} />
+          </View>
+        )}
         <View style={[StyleSheet.absoluteFill, { transform: [{ translateX: shake }] }]}>
           {config && (
             <>
+              {/* 即読ボーナスの目安線（この線より上で要約すると高得点） */}
+              {!fever &&
+                READ_TIERS.map((t) => (
+                  <View key={t.mult} pointerEvents="none" style={[styles.zoneLine, { top: config.basketTop * t.until }]}>
+                    <Text style={styles.zoneText}>
+                      ↑ {t.label} ×{t.mult}
+                    </Text>
+                  </View>
+                ))}
               {game.items.map((it) => (
                 <FallingText key={it.id} item={it} rage={raging} time={game.time} />
               ))}
@@ -329,7 +359,15 @@ export function LineGameScreen({ bestScore, onGameOver, onRetry, onTitle, seed }
             <Text style={styles.bannerSub}>イライラ度 0% にリセット</Text>
           </View>
         )}
-        {rush && game.time - RUSH_FROM < 1.6 && !raging && (
+        {fever && game.feverTime > FEVER_SECONDS - 1.8 && (
+          <View style={[styles.banner, styles.feverBanner]} pointerEvents="none" testID="fever-banner">
+            <OutlinedText fill="#FFE600" shadow="#D0002A" outlineWidth={4} depth={6} style={styles.feverText}>
+              神要約タイム!!
+            </OutlinedText>
+            <Text style={styles.bannerSub}>本物しか来ない！当たっても平気！スコア×3</Text>
+          </View>
+        )}
+        {rush && game.time - RUSH_FROM < 1.6 && !raging && !fever && (
           <View style={styles.banner} pointerEvents="none" testID="rush-banner">
             <OutlinedText fill="#FFE600" shadow="#D0002A" outlineWidth={3} depth={4} style={styles.bannerText}>
               定時前ラッシュ！
@@ -380,6 +418,9 @@ export function LineGameScreen({ bestScore, onGameOver, onRetry, onTitle, seed }
           fakesDodged={game.fakesDodged}
           maxCombo={game.maxCombo}
           lives={game.lives}
+          feverCount={game.feverCount}
+          quickReads={game.quickReads}
+          rares={game.rares}
           bestScore={bestScore}
           isNewRecord={isNewRecord}
           onRetry={onRetry}
@@ -393,14 +434,23 @@ export function LineGameScreen({ bestScore, onGameOver, onRetry, onTitle, seed }
 /** 吹き出しを要約した瞬間の文字（本物は「要約！」、ひっかけは「ひっかけ😜」、結論なしは「…」） */
 function BurstMark({ burst }: { burst: Burst }) {
   const p = burst.age / 0.6;
-  const label = burst.type === 'real' ? '✂️ 要約！' : burst.type === 'fake' ? '😜' : '💤';
+  const label =
+    burst.type === 'real'
+      ? '✂️ 要約！'
+      : burst.type === 'boss'
+        ? '👑 社長命令！'
+        : burst.type === 'gobaku'
+          ? '📱 誤爆回収！'
+          : burst.type === 'fake'
+            ? '😜'
+            : '💤';
   return (
     <Text
       pointerEvents="none"
       style={[
         emojiText,
         styles.burst,
-        burst.type === 'real' && styles.burstReal,
+        (burst.type === 'real' || burst.type === 'boss' || burst.type === 'gobaku') && styles.burstReal,
         { left: burst.x - 80, top: burst.y - 20, opacity: 1 - p, transform: [{ scale: 1 + p * 0.6 }] },
       ]}
     >
@@ -412,6 +462,28 @@ function BurstMark({ burst }: { burst: Burst }) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: lineColors.talk, overflow: 'hidden' },
   rootRage: { backgroundColor: '#5A1020' },
+  rootFever: { backgroundColor: '#06C755' },
+  feverBack: { opacity: 0.85 },
+  feverText: { fontSize: 38, fontWeight: '900', fontStyle: 'italic' },
+  // ほめ言葉のポップ（画面の 4 割の高さ）と重ならないよう、上のほうに出す
+  feverBanner: { top: '12%' },
+  zoneLine: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 0,
+    borderTopWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(255,255,255,0.45)',
+  },
+  zoneText: {
+    position: 'absolute',
+    right: 6,
+    top: -16,
+    fontSize: 10,
+    fontWeight: '900',
+    color: 'rgba(255,255,255,0.8)',
+  },
   hud: { paddingTop: 6, paddingBottom: 6, backgroundColor: lineColors.talkDeep, zIndex: 2 },
   hudRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, gap: 10 },
   clockBox: { alignItems: 'stretch', width: 64 },

@@ -19,6 +19,8 @@ export const SOUND_SOURCES = {
   se_tear: require('../../../assets/sounds/line_tear.wav'),
   se_none: require('../../../assets/sounds/line_none.wav'),
   se_clear: require('../../../assets/sounds/line_clear.wav'),
+  se_fever: require('../../../assets/sounds/line_fever.wav'),
+  se_rare: require('../../../assets/sounds/line_rare.wav'),
 } as const;
 
 export type SoundName = keyof typeof SOUND_SOURCES;
