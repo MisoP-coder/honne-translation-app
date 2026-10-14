@@ -85,7 +85,7 @@ export default function LoginForm() {
           return;
         }
         setNotice(
-          '確認メールを送りました。差出人「Supabase Auth」・件名「Confirm Your Signup」の英語のメールですが、このアプリからのものです。中の「Confirm your mail」を押すと登録が完了します。'
+          '確認メールを送りました。件名「【言いにくいことの翻訳】メールアドレスの確認」です。中のボタンを押すと登録が完了します。'
         );
         return;
       }
@@ -97,7 +97,7 @@ export default function LoginForm() {
         if (resetError) throw resetError;
         // 登録の有無は伝えない(伝えると、誰が登録しているかを外から調べられてしまう)
         setNotice(
-          'パスワード再設定用のリンクをメールで送りました。差出人「Supabase Auth」・件名「Reset Your Password」の英語のメールですが、このアプリからのものです。中の「Reset password」を、この画面を開いたままのブラウザで開いてください。届かない場合は迷惑メールもご確認ください。'
+          'パスワード再設定用のリンクをメールで送りました。件名「【言いにくいことの翻訳】パスワード再設定のご案内」です。中のボタンを、この画面を開いたままのブラウザで開いてください。届かない場合は迷惑メールもご確認ください。'
         );
         return;
       }
@@ -108,7 +108,7 @@ export default function LoginForm() {
       });
       if (otpError) throw otpError;
       setNotice(
-        'ログイン用のリンクをメールで送りました。差出人「Supabase Auth」・件名「Your Magic Link」の英語のメールですが、このアプリからのものです。中の「Log In」を、この画面を開いたままのブラウザで開いてください。'
+        'ログイン用のリンクをメールで送りました。件名「【言いにくいことの翻訳】ログイン用リンク」です。中のボタンを、この画面を開いたままのブラウザで開いてください。'
       );
     } catch (err) {
       setError(translateAuthError(err));
