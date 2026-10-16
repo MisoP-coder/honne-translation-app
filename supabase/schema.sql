@@ -42,6 +42,11 @@ create table if not exists public.outcome_records (
 create index if not exists outcome_records_profile_idx
   on public.outcome_records (profile_id, created_at desc);
 
+-- 外部キー(user_id)側の索引。利用者の削除時に、この列を辿って
+-- 子の行を消しに行くため、索引が無いと表全体の走査になる
+create index if not exists outcome_records_user_id_idx
+  on public.outcome_records (user_id);
+
 -- ---------------------------------------------------------------------------
 -- updated_at の自動更新
 -- ---------------------------------------------------------------------------
@@ -64,44 +69,48 @@ create trigger boss_profiles_set_updated_at
 -- Row Level Security
 --   ブラウザからは anon key で直接アクセスするため、RLS が唯一の認可レイヤーです。
 --   「自分の行だけ読める・書ける」を全操作に対して設定します。
+--
+--   auth.uid() は必ず (select auth.uid()) と書くこと。
+--   裸で書くと行ごとに評価されるため、行数が増えるほど遅くなる。
+--   括弧で包むと1回だけ評価されて使い回される(結果は同じ)。
 -- ---------------------------------------------------------------------------
 alter table public.boss_profiles  enable row level security;
 alter table public.outcome_records enable row level security;
 
 drop policy if exists "boss_profiles_select_own" on public.boss_profiles;
 create policy "boss_profiles_select_own" on public.boss_profiles
-  for select using (auth.uid() = user_id);
+  for select using ((select auth.uid()) = user_id);
 
 drop policy if exists "boss_profiles_insert_own" on public.boss_profiles;
 create policy "boss_profiles_insert_own" on public.boss_profiles
-  for insert with check (auth.uid() = user_id);
+  for insert with check ((select auth.uid()) = user_id);
 
 drop policy if exists "boss_profiles_update_own" on public.boss_profiles;
 create policy "boss_profiles_update_own" on public.boss_profiles
-  for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  for update using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
 
 drop policy if exists "boss_profiles_delete_own" on public.boss_profiles;
 create policy "boss_profiles_delete_own" on public.boss_profiles
-  for delete using (auth.uid() = user_id);
+  for delete using ((select auth.uid()) = user_id);
 
 drop policy if exists "outcome_records_select_own" on public.outcome_records;
 create policy "outcome_records_select_own" on public.outcome_records
-  for select using (auth.uid() = user_id);
+  for select using ((select auth.uid()) = user_id);
 
 drop policy if exists "outcome_records_insert_own" on public.outcome_records;
 create policy "outcome_records_insert_own" on public.outcome_records
   for insert with check (
-    auth.uid() = user_id
+    (select auth.uid()) = user_id
     -- 他人のプロフィールに紐づく記録は作れない
     and exists (
       select 1 from public.boss_profiles p
-      where p.id = profile_id and p.user_id = auth.uid()
+      where p.id = profile_id and p.user_id = (select auth.uid())
     )
   );
 
 drop policy if exists "outcome_records_delete_own" on public.outcome_records;
 create policy "outcome_records_delete_own" on public.outcome_records
-  for delete using (auth.uid() = user_id);
+  for delete using ((select auth.uid()) = user_id);
 
 -- ---------------------------------------------------------------------------
 -- 利用ログ
@@ -126,17 +135,22 @@ create index if not exists analysis_logs_created_at_idx
 create index if not exists analysis_logs_user_idx
   on public.analysis_logs (user_id, created_at desc);
 
+-- 外部キー(profile_id)側の索引。相手を削除したときに
+-- この列を辿って参照を外すため
+create index if not exists analysis_logs_profile_id_idx
+  on public.analysis_logs (profile_id);
+
 alter table public.analysis_logs enable row level security;
 
 -- 集計は SQL Editor(RLS を迂回する権限)から行う。
 -- ユーザー自身には、自分の行の参照と追加だけを許可する。削除は許可しない。
 drop policy if exists "analysis_logs_select_own" on public.analysis_logs;
 create policy "analysis_logs_select_own" on public.analysis_logs
-  for select using (auth.uid() = user_id);
+  for select using ((select auth.uid()) = user_id);
 
 drop policy if exists "analysis_logs_insert_own" on public.analysis_logs;
 create policy "analysis_logs_insert_own" on public.analysis_logs
-  for insert with check (auth.uid() = user_id);
+  for insert with check ((select auth.uid()) = user_id);
 
 -- ---------------------------------------------------------------------------
 -- 伝え方(口頭 / メール・チャット)の記録
@@ -161,12 +175,12 @@ alter table public.outcome_records
 drop policy if exists "outcome_records_update_own" on public.outcome_records;
 create policy "outcome_records_update_own" on public.outcome_records
   for update
-  using (auth.uid() = user_id)
+  using ((select auth.uid()) = user_id)
   with check (
-    auth.uid() = user_id
+    (select auth.uid()) = user_id
     and exists (
       select 1 from public.boss_profiles p
-      where p.id = profile_id and p.user_id = auth.uid()
+      where p.id = profile_id and p.user_id = (select auth.uid())
     )
   );
 
