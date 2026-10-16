@@ -1,0 +1,32 @@
+# カラメル乗せゲームの世界ランキング（Supabase）を眠らせないための定期アクセス。
+# Supabase の無料プランは、1 週間ほどアクセスがないとプロジェクトを自動で一時停止し、
+# ランキングが「読み込めませんでした」になる。3 日に 1 回、上位 1 件を読むだけのアクセスをする。
+# 使うのはゲームと同じ公開の値（ブラウザに埋め込まれていて秘密ではない）。書き込みはしない。
+name: caramel-just-meet → Supabase を眠らせない
+
+on:
+  schedule:
+    - cron: '17 3 */3 * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: ランキングの上位 1 件を読む
+        env:
+          SUPABASE_URL: https://cgvcpgujqoimnstwxuir.supabase.co
+          SUPABASE_KEY: sb_publishable_lmbX2GZvOrsy96J_QU_j7A_cYpKdoeR
+        run: |
+          status=$(curl -sS -o /tmp/body.txt -w '%{http_code}' --max-time 30 \
+            -X POST "$SUPABASE_URL/rest/v1/rpc/caramel_top" \
+            -H "apikey: $SUPABASE_KEY" -H 'Content-Type: application/json' \
+            -d '{"p_limit":1}')
+          echo "HTTP $status"
+          head -c 300 /tmp/body.txt; echo
+          if [ "$status" != "200" ]; then
+            echo "::error::ランキングを読めませんでした（HTTP $status）。Supabase のプロジェクトが一時停止していないか確認してください。"
+            exit 1
+          fi
