@@ -144,6 +144,22 @@ Claude API 側の問題です。Anthropic Console の残高と、`ANTHROPIC_API_
 3. Vercel が自動で再デプロイする(1〜2分)
 4. スマホで URL を再読み込みして確認する
 
+### ビルドが飛ばされることがあります
+
+このリポジトリには、このアプリ以外のものも入っています。
+
+| フォルダ | 中身 | 公開先 |
+| --- | --- | --- |
+| ルート(`app/` `components/` など) | **このアプリ** | Vercel |
+| `caramel-just-meet/` | カラメル乗せゲーム | Cloudflare Pages |
+| `misop-craft-site/` | misop-craft.com のトップページ | GitHub Pages |
+
+**他のフォルダだけを変更した push では、Vercel はビルドしません。**`vercel.json` の `ignoreCommand` で判定しています。
+
+このとき Vercel の画面には「Skipped」と出ますが、**失敗ではありません。**このアプリに関係のない変更だったという意味です。
+
+> 判定しているのは、**直前のコミットと比べて、`caramel-just-meet` `misop-craft-site` `.github` 以外に変更があったかどうか**です。両方に変更がある場合はビルドされます。
+
 ## ファイル構成
 
 ```
@@ -178,7 +194,7 @@ docs/email-templates.md   Supabase に貼り付けるメール文面(日本語)
 docs/launch.md            無料公開の手順(費用の蓋・ドメイン・告知・計測)
 docs/note-article.md      note 記事の下書き(告知用・無料)
 docs/note-paid-article.md note 記事の下書き(スマホ開発記・有料)
-vercel.json               Vercel に Next.js プロジェクトだと伝える
+vercel.json               Vercel の設定(フレームワークと、ビルドを省く条件)
 ```
 
 ## データの流れ
