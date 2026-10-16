@@ -202,8 +202,17 @@ as $$
   where created_at >= (date_trunc('day', now() at time zone 'Asia/Tokyo') at time zone 'Asia/Tokyo');
 $$;
 
--- 返すのは件数だけだが、呼べる相手はログイン済みの利用者に限る
+-- 返すのは件数だけだが、呼べる相手はログイン済みの利用者に限る。
+--
+-- revoke ... from public だけでは足りない。Supabase は public スキーマの
+-- 関数に対して anon / authenticated / service_role へ個別に EXECUTE を
+-- 付けるので、PUBLIC を剥がしても anon の分は残る。名指しで外す。
+--
+-- 「登録なしで使っている人」はロールが authenticated(is_anonymous=true)
+-- なので、anon を外しても影響しない。影響するのは JWT を持たない
+-- 公開キーだけのリクエストで、アプリはそれを行っていない。
 revoke all on function public.analysis_count_today() from public;
+revoke execute on function public.analysis_count_today() from anon;
 grant execute on function public.analysis_count_today() to authenticated;
 
 -- ---------------------------------------------------------------------------
