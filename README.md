@@ -153,7 +153,7 @@ Claude API 側の問題です。Anthropic Console の残高と、`ANTHROPIC_API_
 | ルート(`app/` `components/` など) | **このアプリ** | Vercel |
 | `caramel-just-meet/` | カラメル乗せゲーム | Cloudflare Pages |
 | `misop-craft-site/` | misop-craft.com のトップページ | GitHub Pages |
-| `sns/` `.claude/` | SNS運用会社(AI 社員による投稿づくり。[`sns/README.md`](sns/README.md)) | 公開しない |
+| `sns/` `.claude/` | SNS運用会社(X @papa_taito の運用。[`sns/README.md`](sns/README.md)) | 公開しない |
 
 **他のフォルダだけを変更した push では、Vercel はビルドしません。**`vercel.json` の `ignoreCommand` で判定しています。
 
