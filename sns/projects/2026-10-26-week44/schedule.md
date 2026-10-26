@@ -17,5 +17,6 @@
 | 10/31(土)19:00 | 投稿10 ハロウィン | 19:30 | trig_017E4ovdwj9emXhxtBUTjF6c |
 | 11/1(日)8:00 | 投稿11 朝のあいさつ | 8:30 | trig_016NJwUP8nvoA5BcHyeRgJz8 |
 | 11/1(日)20:00 | 投稿12 17アイス | 20:30 | trig_018CadimpXwWXGgcDmFcBuEp |
+| 11/2(日)9:30 | プロフィール一式の変更(../2026-10-26-profile/04-final.md) | 10:00ごろ | trig_01PkZLw9entv6oW2pAdCEmm8 |
 
 - 任意の昼(10/27・10/30 12:15)は、写真があるときだけの枠なので通知を入れていない
