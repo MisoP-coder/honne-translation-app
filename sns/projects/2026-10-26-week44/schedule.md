@@ -10,7 +10,7 @@
 | 10/28(水)7:00 | 投稿3 朝のあいさつ | 7:30 | trig_01ERScN8VdGq2ie4i1xXNJtU |
 | 10/28(水)21:00 | 投稿4 しりとり(検証A) | 21:30 | trig_01GiAJ6rQzgRzUCxbi7iK6PM |
 | 10/29(木)7:00 | 投稿5 朝のあいさつ | 7:30 | trig_01PCcJwneU4mCQZ2jUiuyp5c |
-| 10/29(木)21:00 | 投稿6 うれしかった場面(検証B) | 21:30 | trig_01B9hdX51gGfiXj8T8SrhLKH |
+| 10/29(木)21:00 | 投稿4 しりとり(10/28 分の振替) | 21:30 | trig_01B9hdX51gGfiXj8T8SrhLKH |
 | 10/30(金)7:00 | 投稿7 朝のあいさつ | 7:30 | trig_0122T5ajVVbREpHgXwGtYRof |
 | 10/30(金)20:30 | 投稿8 パンどろぼう | 21:00 | trig_013gnVNpdRcihPwmZuwJDSwk |
 | 10/31(土)8:00 | 投稿9 朝のあいさつ | 8:30 | trig_01Tuh17HFEnR7cHcbdcVGQcP |
