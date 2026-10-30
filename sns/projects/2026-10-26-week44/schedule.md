@@ -13,10 +13,12 @@
 | 10/29(木)21:00 | 投稿4 しりとり(10/28 分の振替) | 21:30 | trig_01B9hdX51gGfiXj8T8SrhLKH |
 | 10/30(金)7:00 | 投稿7 朝のあいさつ | 7:30 | trig_0122T5ajVVbREpHgXwGtYRof |
 | 10/30(金)20:30 | 投稿8 パンどろぼう | 21:00 | trig_013gnVNpdRcihPwmZuwJDSwk |
-| 10/31(土)8:00 | 投稿9 朝のあいさつ | 8:30 | trig_01Tuh17HFEnR7cHcbdcVGQcP |
-| 10/31(土)19:00 | 投稿10 ハロウィン | 19:30 | trig_017E4ovdwj9emXhxtBUTjF6c |
-| 11/1(日)8:00 | 投稿11 朝のあいさつ | 8:30 | trig_016NJwUP8nvoA5BcHyeRgJz8 |
-| 11/1(日)20:00 | 投稿12 17アイス | 20:30 | trig_018CadimpXwWXGgcDmFcBuEp |
-| 11/2(日)9:30 | プロフィール一式の変更(../2026-10-26-profile/04-final.md) | 10:00ごろ | trig_01PkZLw9entv6oW2pAdCEmm8 |
+
+
+
+
+
 
 - 任意の昼(10/27・10/30 12:15)は、写真があるときだけの枠なので通知を入れていない
+
+- 2026-10-31: 本人の決定で「軽い形」に切り替え。10/31 以降の通知(5件)はすべて削除
