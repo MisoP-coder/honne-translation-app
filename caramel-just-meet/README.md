@@ -88,8 +88,8 @@ GitHub の **Settings → Secrets and variables → Actions → Variables** に�
 プライバシーポリシーは `public/privacy.html`、遊び方のページは `public/about.html`。
 
 ### 運営メモ
-- Supabase の無料プランは、1 週間ほどアクセスがないとプロジェクトを一時停止する（ランキングが「読み込めませんでした」になる）。
-  `.github/workflows/caramel-supabase-keepalive.yml` が 3 日に 1 回ランキングを読んで防いでいる。
+- Supabase の無料プランは、直近 1 週間のデータベースへのアクセスが少ないとプロジェクトを一時停止する（ランキングが「読み込めませんでした」になる）。
+  `.github/workflows/caramel-supabase-keepalive.yml` が 6 時間ごとに 3 回ずつランキングを読んで防いでいる（3 日に 1 回では足りなかった）。
   それでも止まったら、Supabase のダッシュボードでプロジェクトを開き **Restore** を押す。
   （GitHub は、リポジトリに 60 日間動きがないと定期実行を止めるので、そのときは Actions の画面で有効に戻す）
 - よくない名前は Supabase の **Table Editor → caramel_scores** から行を消す。
