@@ -1,12 +1,14 @@
 # カラメル乗せゲームの世界ランキング（Supabase）を眠らせないための定期アクセス。
-# Supabase の無料プランは、1 週間ほどアクセスがないとプロジェクトを自動で一時停止し、
-# ランキングが「読み込めませんでした」になる。3 日に 1 回、上位 1 件を読むだけのアクセスをする。
+# Supabase の無料プランは、直近 1 週間のデータベースへのアクセスが少ないとプロジェクトを自動で一時停止し、
+# ランキングが「読み込めませんでした」になる。Supabase の説明では「1 日に数回のアクセス」があれば止まらない。
+# （最初は 3 日に 1 回にしていたが、それでは足りずに止まった）
+# そこで 6 時間ごと（1 日 4 回）に、ランキングを読むだけのアクセスを 3 回する。
 # 使うのはゲームと同じ公開の値（ブラウザに埋め込まれていて秘密ではない）。書き込みはしない。
 name: caramel-just-meet → Supabase を眠らせない
 
 on:
   schedule:
-    - cron: '17 3 */3 * *'
+    - cron: '17 */6 * * *'
   workflow_dispatch:
 
 permissions: {}
@@ -15,18 +17,25 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: ランキングの上位 1 件を読む
+      - name: ランキングを読む（3 回）
         env:
           SUPABASE_URL: https://cgvcpgujqoimnstwxuir.supabase.co
           SUPABASE_KEY: sb_publishable_lmbX2GZvOrsy96J_QU_j7A_cYpKdoeR
         run: |
-          status=$(curl -sS -o /tmp/body.txt -w '%{http_code}' --max-time 30 \
-            -X POST "$SUPABASE_URL/rest/v1/rpc/caramel_top" \
-            -H "apikey: $SUPABASE_KEY" -H 'Content-Type: application/json' \
-            -d '{"p_limit":1}')
-          echo "HTTP $status"
-          head -c 300 /tmp/body.txt; echo
-          if [ "$status" != "200" ]; then
-            echo "::error::ランキングを読めませんでした（HTTP $status）。Supabase のプロジェクトが一時停止していないか確認してください。"
+          call() {
+            status=$(curl -sS -o /tmp/body.txt -w '%{http_code}' --max-time 30 \
+              -X POST "$SUPABASE_URL/rest/v1/rpc/$1" \
+              -H "apikey: $SUPABASE_KEY" -H 'Content-Type: application/json' \
+              -d "$2") || status="000"
+            echo "$1 → HTTP $status"
+            head -c 200 /tmp/body.txt 2>/dev/null; echo
+            [ "$status" = "200" ]
+          }
+          ok=true
+          call caramel_top '{"p_limit":1}' || ok=false
+          call caramel_top '{"p_limit":20}' || ok=false
+          call caramel_rank '{"p_score":930,"p_combo":3}' || ok=false
+          if [ "$ok" != true ]; then
+            echo "::error::ランキングを読めませんでした。Supabase のプロジェクトが一時停止していないか確認してください（ダッシュボードで Restore）。"
             exit 1
           fi
